@@ -20,9 +20,13 @@ SELECT
     raw_script_keys.raw_key as raw_script_key,
     raw_script_keys.key_family AS script_key_family,
     raw_script_keys.key_index AS script_key_index,
+    raw_script_keys.tapscript_preimage AS script_key_tapscript_preimage,
+    raw_script_keys.tapscript_preimage_type AS script_key_tapscript_preimage_type,
     taproot_keys.raw_key AS raw_taproot_key,
     taproot_keys.key_family AS taproot_key_family,
-    taproot_keys.key_index AS taproot_key_index
+    taproot_keys.key_index AS taproot_key_index,
+    taproot_keys.tapscript_preimage AS taproot_key_tapscript_preimage,
+    taproot_keys.tapscript_preimage_type AS taproot_key_tapscript_preimage_type
 FROM addrs
 JOIN script_keys
   ON addrs.script_key_id = script_keys.script_key_id
@@ -34,22 +38,26 @@ WHERE taproot_output_key = $1
 `
 
 type FetchAddrByTaprootOutputKeyRow struct {
-	Version          int16
-	GenesisAssetID   int32
-	GroupKey         []byte
-	TaprootOutputKey []byte
-	Amount           int64
-	AssetType        int16
-	CreationTime     time.Time
-	ManagedFrom      sql.NullTime
-	TweakedScriptKey []byte
-	ScriptKeyTweak   []byte
-	RawScriptKey     []byte
-	ScriptKeyFamily  int32
-	ScriptKeyIndex   int32
-	RawTaprootKey    []byte
-	TaprootKeyFamily int32
-	TaprootKeyIndex  int32
+	Version                         int16
+	GenesisAssetID                  int32
+	GroupKey                        []byte
+	TaprootOutputKey                []byte
+	Amount                          int64
+	AssetType                       int16
+	CreationTime                    time.Time
+	ManagedFrom                     sql.NullTime
+	TweakedScriptKey                []byte
+	ScriptKeyTweak                  []byte
+	RawScriptKey                    []byte
+	ScriptKeyFamily                 int32
+	ScriptKeyIndex                  int32
+	ScriptKeyTapscriptPreimage      []byte
+	ScriptKeyTapscriptPreimageType  sql.NullInt32
+	RawTaprootKey                   []byte
+	TaprootKeyFamily                int32
+	TaprootKeyIndex                 int32
+	TaprootKeyTapscriptPreimage     []byte
+	TaprootKeyTapscriptPreimageType sql.NullInt32
 }
 
 func (q *Queries) FetchAddrByTaprootOutputKey(ctx context.Context, taprootOutputKey []byte) (FetchAddrByTaprootOutputKeyRow, error) {
@@ -69,9 +77,13 @@ func (q *Queries) FetchAddrByTaprootOutputKey(ctx context.Context, taprootOutput
 		&i.RawScriptKey,
 		&i.ScriptKeyFamily,
 		&i.ScriptKeyIndex,
+		&i.ScriptKeyTapscriptPreimage,
+		&i.ScriptKeyTapscriptPreimageType,
 		&i.RawTaprootKey,
 		&i.TaprootKeyFamily,
 		&i.TaprootKeyIndex,
+		&i.TaprootKeyTapscriptPreimage,
+		&i.TaprootKeyTapscriptPreimageType,
 	)
 	return i, err
 }
@@ -135,9 +147,13 @@ SELECT
     raw_script_keys.raw_key AS raw_script_key,
     raw_script_keys.key_family AS script_key_family,
     raw_script_keys.key_index AS script_key_index,
+    raw_script_keys.tapscript_preimage AS script_key_tapscript_preimage,
+    raw_script_keys.tapscript_preimage_type AS script_key_tapscript_preimage_type,
     taproot_keys.raw_key AS raw_taproot_key, 
     taproot_keys.key_family AS taproot_key_family,
-    taproot_keys.key_index AS taproot_key_index
+    taproot_keys.key_index AS taproot_key_index,
+    taproot_keys.tapscript_preimage AS taproot_key_tapscript_preimage,
+    taproot_keys.tapscript_preimage_type AS taproot_key_tapscript_preimage_type
 FROM addrs
 JOIN script_keys
     ON addrs.script_key_id = script_keys.script_key_id
@@ -162,22 +178,26 @@ type FetchAddrsParams struct {
 }
 
 type FetchAddrsRow struct {
-	Version          int16
-	GenesisAssetID   int32
-	GroupKey         []byte
-	TaprootOutputKey []byte
-	Amount           int64
-	AssetType        int16
-	CreationTime     time.Time
-	ManagedFrom      sql.NullTime
-	TweakedScriptKey []byte
-	ScriptKeyTweak   []byte
-	RawScriptKey     []byte
-	ScriptKeyFamily  int32
-	ScriptKeyIndex   int32
-	RawTaprootKey    []byte
-	TaprootKeyFamily int32
-	TaprootKeyIndex  int32
+	Version                         int16
+	GenesisAssetID                  int32
+	GroupKey                        []byte
+	TaprootOutputKey                []byte
+	Amount                          int64
+	AssetType                       int16
+	CreationTime                    time.Time
+	ManagedFrom                     sql.NullTime
+	TweakedScriptKey                []byte
+	ScriptKeyTweak                  []byte
+	RawScriptKey                    []byte
+	ScriptKeyFamily                 int32
+	ScriptKeyIndex                  int32
+	ScriptKeyTapscriptPreimage      []byte
+	ScriptKeyTapscriptPreimageType  sql.NullInt32
+	RawTaprootKey                   []byte
+	TaprootKeyFamily                int32
+	TaprootKeyIndex                 int32
+	TaprootKeyTapscriptPreimage     []byte
+	TaprootKeyTapscriptPreimageType sql.NullInt32
 }
 
 func (q *Queries) FetchAddrs(ctx context.Context, arg FetchAddrsParams) ([]FetchAddrsRow, error) {
@@ -209,9 +229,13 @@ func (q *Queries) FetchAddrs(ctx context.Context, arg FetchAddrsParams) ([]Fetch
 			&i.RawScriptKey,
 			&i.ScriptKeyFamily,
 			&i.ScriptKeyIndex,
+			&i.ScriptKeyTapscriptPreimage,
+			&i.ScriptKeyTapscriptPreimageType,
 			&i.RawTaprootKey,
 			&i.TaprootKeyFamily,
 			&i.TaprootKeyIndex,
+			&i.TaprootKeyTapscriptPreimage,
+			&i.TaprootKeyTapscriptPreimageType,
 		); err != nil {
 			return nil, err
 		}

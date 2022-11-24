@@ -26,8 +26,12 @@ SELECT
     utxos.taro_root, utxos.tapscript_sibling,
     utxos.utxo_id AS new_anchor_utxo_id, txns.raw_tx AS anchor_tx_bytes,
     txns.txid AS anchor_txid, txns.txn_id AS anchor_tx_primary_key,
-    txns.chain_fees, transfer_time_unix, keys.raw_key AS internal_key_bytes,
-    keys.key_family AS internal_key_fam, keys.key_index AS internal_key_index,
+    txns.chain_fees, transfer_time_unix,
+    keys.raw_key AS internal_key_bytes,
+    keys.key_family AS internal_key_fam,
+    keys.key_index AS internal_key_index,
+    keys.tapscript_preimage AS internal_key_tapscript_preimage,
+    keys.tapscript_preimage_type AS internal_key_tapscript_preimage_type,
     id AS transfer_id, height_hint, transfer_time_unix
 FROM asset_transfers
 JOIN internal_keys keys
@@ -60,6 +64,8 @@ SELECT
     internal_keys.raw_key AS new_raw_script_key_bytes,
     internal_keys.key_family AS new_script_key_family, 
     internal_keys.key_index AS new_script_key_index,
+    internal_keys.tapscript_preimage AS new_script_key_tapscript_preimage,
+    internal_keys.tapscript_preimage_type AS new_script_key_tapscript_preimage_type,
     deltas.serialized_witnesses, split_commitment_root_hash, 
     split_commitment_root_value
 FROM asset_deltas deltas
@@ -78,6 +84,8 @@ SELECT
     internal_keys.raw_key AS new_raw_script_key_bytes,
     internal_keys.key_family AS new_script_key_family, 
     internal_keys.key_index AS new_script_key_index,
+    internal_keys.tapscript_preimage AS new_script_key_tapscript_preimage,
+    internal_keys.tapscript_preimage_type AS new_script_key_tapscript_preimage_type,
     deltas.serialized_witnesses, deltas.split_commitment_root_hash, 
     deltas.split_commitment_root_value, transfer_proofs.sender_proof,
     transfer_proofs.receiver_proof

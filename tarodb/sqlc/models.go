@@ -159,10 +159,12 @@ type GenesisPoint struct {
 }
 
 type InternalKey struct {
-	KeyID     int32
-	RawKey    []byte
-	KeyFamily int32
-	KeyIndex  int32
+	KeyID                 int32
+	RawKey                []byte
+	KeyFamily             int32
+	KeyIndex              int32
+	TapscriptPreimage     []byte
+	TapscriptPreimageType sql.NullInt32
 }
 
 type KeyGroupInfoView struct {

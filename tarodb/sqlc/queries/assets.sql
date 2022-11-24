@@ -1,8 +1,8 @@
 -- name: UpsertInternalKey :one
 INSERT INTO internal_keys (
-    raw_key,  key_family, key_index
+    raw_key,  key_family, key_index, tapscript_preimage, tapscript_preimage_type
 ) VALUES (
-    $1, $2, $3
+    $1, $2, $3, $4, $5
 ) ON CONFLICT (raw_key)
     -- This is a NOP, raw_key is the unique field that caused the conflict.
     DO UPDATE SET raw_key = EXCLUDED.raw_key
@@ -158,7 +158,8 @@ WITH genesis_info AS (
     -- assets we care about. We obtain only the assets found in the batch
     -- above, with the WHERE query at the bottom.
     SELECT 
-        sig_id, gen_asset_id, genesis_sig, tweaked_group_key, raw_key, key_index, key_family
+        sig_id, gen_asset_id, genesis_sig, tweaked_group_key, raw_key, key_index,
+        key_family
     FROM asset_group_sigs sigs
     JOIN asset_groups groups
         ON sigs.group_key_id = groups.group_id
@@ -169,10 +170,16 @@ WITH genesis_info AS (
 )
 SELECT 
     version, script_keys.tweak, script_keys.tweaked_script_key, 
-    internal_keys.raw_key AS script_key_raw, internal_keys.key_family AS script_key_fam,
-    internal_keys.key_index AS script_key_index, key_group_info.genesis_sig, 
-    key_group_info.tweaked_group_key, key_group_info.raw_key AS group_key_raw,
-    key_group_info.key_family AS group_key_family, key_group_info.key_index AS group_key_index,
+    internal_keys.raw_key AS script_key_raw,
+    internal_keys.key_family AS script_key_fam,
+    internal_keys.key_index AS script_key_index,
+    internal_keys.tapscript_preimage AS script_key_tapscript_preimage,
+    internal_keys.tapscript_preimage_type AS script_key_tapscript_preimage_type,
+    key_group_info.genesis_sig, 
+    key_group_info.tweaked_group_key,
+    key_group_info.raw_key AS group_key_raw,
+    key_group_info.key_family AS group_key_family,
+    key_group_info.key_index AS group_key_index,
     script_version, amount, lock_time, relative_lock_time, 
     genesis_info.asset_id, genesis_info.asset_tag, genesis_info.meta_data, 
     genesis_info.output_index AS genesis_output_index, genesis_info.asset_type,
@@ -231,6 +238,8 @@ SELECT
     internal_keys.raw_key AS script_key_raw,
     internal_keys.key_family AS script_key_fam,
     internal_keys.key_index AS script_key_index,
+    internal_keys.tapscript_preimage AS script_key_tapscript_preimage,
+    internal_keys.tapscript_preimage_type AS script_key_tapscript_preimage_type,
     key_group_info_view.genesis_sig, 
     key_group_info_view.tweaked_group_key,
     key_group_info_view.raw_key AS group_key_raw,

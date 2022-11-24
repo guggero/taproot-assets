@@ -75,6 +75,8 @@ SELECT
     internal_keys.raw_key AS new_raw_script_key_bytes,
     internal_keys.key_family AS new_script_key_family, 
     internal_keys.key_index AS new_script_key_index,
+    internal_keys.tapscript_preimage AS new_script_key_tapscript_preimage,
+    internal_keys.tapscript_preimage_type AS new_script_key_tapscript_preimage_type,
     deltas.serialized_witnesses, split_commitment_root_hash, 
     split_commitment_root_value
 FROM asset_deltas deltas
@@ -86,17 +88,19 @@ WHERE transfer_id = $1
 `
 
 type FetchAssetDeltasRow struct {
-	OldScriptKey             []byte
-	NewAmt                   int64
-	NewScriptKeyBytes        []byte
-	ScriptKeyTweak           []byte
-	NewScriptKeyID           int32
-	NewRawScriptKeyBytes     []byte
-	NewScriptKeyFamily       int32
-	NewScriptKeyIndex        int32
-	SerializedWitnesses      []byte
-	SplitCommitmentRootHash  []byte
-	SplitCommitmentRootValue sql.NullInt64
+	OldScriptKey                      []byte
+	NewAmt                            int64
+	NewScriptKeyBytes                 []byte
+	ScriptKeyTweak                    []byte
+	NewScriptKeyID                    int32
+	NewRawScriptKeyBytes              []byte
+	NewScriptKeyFamily                int32
+	NewScriptKeyIndex                 int32
+	NewScriptKeyTapscriptPreimage     []byte
+	NewScriptKeyTapscriptPreimageType sql.NullInt32
+	SerializedWitnesses               []byte
+	SplitCommitmentRootHash           []byte
+	SplitCommitmentRootValue          sql.NullInt64
 }
 
 func (q *Queries) FetchAssetDeltas(ctx context.Context, transferID int32) ([]FetchAssetDeltasRow, error) {
@@ -117,6 +121,8 @@ func (q *Queries) FetchAssetDeltas(ctx context.Context, transferID int32) ([]Fet
 			&i.NewRawScriptKeyBytes,
 			&i.NewScriptKeyFamily,
 			&i.NewScriptKeyIndex,
+			&i.NewScriptKeyTapscriptPreimage,
+			&i.NewScriptKeyTapscriptPreimageType,
 			&i.SerializedWitnesses,
 			&i.SplitCommitmentRootHash,
 			&i.SplitCommitmentRootValue,
@@ -143,6 +149,8 @@ SELECT
     internal_keys.raw_key AS new_raw_script_key_bytes,
     internal_keys.key_family AS new_script_key_family, 
     internal_keys.key_index AS new_script_key_index,
+    internal_keys.tapscript_preimage AS new_script_key_tapscript_preimage,
+    internal_keys.tapscript_preimage_type AS new_script_key_tapscript_preimage_type,
     deltas.serialized_witnesses, deltas.split_commitment_root_hash, 
     deltas.split_commitment_root_value, transfer_proofs.sender_proof,
     transfer_proofs.receiver_proof
@@ -157,19 +165,21 @@ WHERE deltas.transfer_id = $1
 `
 
 type FetchAssetDeltasWithProofsRow struct {
-	OldScriptKey             []byte
-	NewAmt                   int64
-	NewScriptKeyBytes        []byte
-	ScriptKeyTweak           []byte
-	NewScriptKeyID           int32
-	NewRawScriptKeyBytes     []byte
-	NewScriptKeyFamily       int32
-	NewScriptKeyIndex        int32
-	SerializedWitnesses      []byte
-	SplitCommitmentRootHash  []byte
-	SplitCommitmentRootValue sql.NullInt64
-	SenderProof              []byte
-	ReceiverProof            []byte
+	OldScriptKey                      []byte
+	NewAmt                            int64
+	NewScriptKeyBytes                 []byte
+	ScriptKeyTweak                    []byte
+	NewScriptKeyID                    int32
+	NewRawScriptKeyBytes              []byte
+	NewScriptKeyFamily                int32
+	NewScriptKeyIndex                 int32
+	NewScriptKeyTapscriptPreimage     []byte
+	NewScriptKeyTapscriptPreimageType sql.NullInt32
+	SerializedWitnesses               []byte
+	SplitCommitmentRootHash           []byte
+	SplitCommitmentRootValue          sql.NullInt64
+	SenderProof                       []byte
+	ReceiverProof                     []byte
 }
 
 func (q *Queries) FetchAssetDeltasWithProofs(ctx context.Context, transferID int32) ([]FetchAssetDeltasWithProofsRow, error) {
@@ -190,6 +200,8 @@ func (q *Queries) FetchAssetDeltasWithProofs(ctx context.Context, transferID int
 			&i.NewRawScriptKeyBytes,
 			&i.NewScriptKeyFamily,
 			&i.NewScriptKeyIndex,
+			&i.NewScriptKeyTapscriptPreimage,
+			&i.NewScriptKeyTapscriptPreimageType,
 			&i.SerializedWitnesses,
 			&i.SplitCommitmentRootHash,
 			&i.SplitCommitmentRootValue,
@@ -317,8 +329,12 @@ SELECT
     utxos.taro_root, utxos.tapscript_sibling,
     utxos.utxo_id AS new_anchor_utxo_id, txns.raw_tx AS anchor_tx_bytes,
     txns.txid AS anchor_txid, txns.txn_id AS anchor_tx_primary_key,
-    txns.chain_fees, transfer_time_unix, keys.raw_key AS internal_key_bytes,
-    keys.key_family AS internal_key_fam, keys.key_index AS internal_key_index,
+    txns.chain_fees, transfer_time_unix,
+    keys.raw_key AS internal_key_bytes,
+    keys.key_family AS internal_key_fam,
+    keys.key_index AS internal_key_index,
+    keys.tapscript_preimage AS internal_key_tapscript_preimage,
+    keys.tapscript_preimage_type AS internal_key_tapscript_preimage_type,
     id AS transfer_id, height_hint, transfer_time_unix
 FROM asset_transfers
 JOIN internal_keys keys
@@ -349,22 +365,24 @@ type QueryAssetTransfersParams struct {
 }
 
 type QueryAssetTransfersRow struct {
-	OldAnchorPoint     []byte
-	NewAnchorPoint     []byte
-	TaroRoot           []byte
-	TapscriptSibling   []byte
-	NewAnchorUtxoID    int32
-	AnchorTxBytes      []byte
-	AnchorTxid         []byte
-	AnchorTxPrimaryKey int32
-	ChainFees          int64
-	TransferTimeUnix   time.Time
-	InternalKeyBytes   []byte
-	InternalKeyFam     int32
-	InternalKeyIndex   int32
-	TransferID         int32
-	HeightHint         int32
-	TransferTimeUnix_2 time.Time
+	OldAnchorPoint                   []byte
+	NewAnchorPoint                   []byte
+	TaroRoot                         []byte
+	TapscriptSibling                 []byte
+	NewAnchorUtxoID                  int32
+	AnchorTxBytes                    []byte
+	AnchorTxid                       []byte
+	AnchorTxPrimaryKey               int32
+	ChainFees                        int64
+	TransferTimeUnix                 time.Time
+	InternalKeyBytes                 []byte
+	InternalKeyFam                   int32
+	InternalKeyIndex                 int32
+	InternalKeyTapscriptPreimage     []byte
+	InternalKeyTapscriptPreimageType sql.NullInt32
+	TransferID                       int32
+	HeightHint                       int32
+	TransferTimeUnix_2               time.Time
 }
 
 func (q *Queries) QueryAssetTransfers(ctx context.Context, arg QueryAssetTransfersParams) ([]QueryAssetTransfersRow, error) {
@@ -390,6 +408,8 @@ func (q *Queries) QueryAssetTransfers(ctx context.Context, arg QueryAssetTransfe
 			&i.InternalKeyBytes,
 			&i.InternalKeyFam,
 			&i.InternalKeyIndex,
+			&i.InternalKeyTapscriptPreimage,
+			&i.InternalKeyTapscriptPreimageType,
 			&i.TransferID,
 			&i.HeightHint,
 			&i.TransferTimeUnix_2,

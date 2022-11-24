@@ -53,7 +53,7 @@ func (q *Queries) AllAssets(ctx context.Context) ([]Asset, error) {
 }
 
 const allInternalKeys = `-- name: AllInternalKeys :many
-SELECT key_id, raw_key, key_family, key_index 
+SELECT key_id, raw_key, key_family, key_index, tapscript_preimage, tapscript_preimage_type 
 FROM internal_keys
 `
 
@@ -71,6 +71,8 @@ func (q *Queries) AllInternalKeys(ctx context.Context) ([]InternalKey, error) {
 			&i.RawKey,
 			&i.KeyFamily,
 			&i.KeyIndex,
+			&i.TapscriptPreimage,
+			&i.TapscriptPreimageType,
 		); err != nil {
 			return nil, err
 		}
@@ -86,24 +88,26 @@ func (q *Queries) AllInternalKeys(ctx context.Context) ([]InternalKey, error) {
 }
 
 const allMintingBatches = `-- name: AllMintingBatches :many
-SELECT batch_id, batch_state, minting_tx_psbt, change_output_index, genesis_id, height_hint, creation_time_unix, key_id, raw_key, key_family, key_index 
+SELECT batch_id, batch_state, minting_tx_psbt, change_output_index, genesis_id, height_hint, creation_time_unix, key_id, raw_key, key_family, key_index, tapscript_preimage, tapscript_preimage_type 
 FROM asset_minting_batches
 JOIN internal_keys 
 ON asset_minting_batches.batch_id = internal_keys.key_id
 `
 
 type AllMintingBatchesRow struct {
-	BatchID           int32
-	BatchState        int16
-	MintingTxPsbt     []byte
-	ChangeOutputIndex sql.NullInt32
-	GenesisID         sql.NullInt32
-	HeightHint        int32
-	CreationTimeUnix  time.Time
-	KeyID             int32
-	RawKey            []byte
-	KeyFamily         int32
-	KeyIndex          int32
+	BatchID               int32
+	BatchState            int16
+	MintingTxPsbt         []byte
+	ChangeOutputIndex     sql.NullInt32
+	GenesisID             sql.NullInt32
+	HeightHint            int32
+	CreationTimeUnix      time.Time
+	KeyID                 int32
+	RawKey                []byte
+	KeyFamily             int32
+	KeyIndex              int32
+	TapscriptPreimage     []byte
+	TapscriptPreimageType sql.NullInt32
 }
 
 func (q *Queries) AllMintingBatches(ctx context.Context) ([]AllMintingBatchesRow, error) {
@@ -127,6 +131,8 @@ func (q *Queries) AllMintingBatches(ctx context.Context) ([]AllMintingBatchesRow
 			&i.RawKey,
 			&i.KeyFamily,
 			&i.KeyIndex,
+			&i.TapscriptPreimage,
+			&i.TapscriptPreimageType,
 		); err != nil {
 			return nil, err
 		}
@@ -618,7 +624,8 @@ WITH genesis_info AS (
     -- assets we care about. We obtain only the assets found in the batch
     -- above, with the WHERE query at the bottom.
     SELECT 
-        sig_id, gen_asset_id, genesis_sig, tweaked_group_key, raw_key, key_index, key_family
+        sig_id, gen_asset_id, genesis_sig, tweaked_group_key, raw_key, key_index,
+        key_family
     FROM asset_group_sigs sigs
     JOIN asset_groups groups
         ON sigs.group_key_id = groups.group_id
@@ -629,10 +636,16 @@ WITH genesis_info AS (
 )
 SELECT 
     version, script_keys.tweak, script_keys.tweaked_script_key, 
-    internal_keys.raw_key AS script_key_raw, internal_keys.key_family AS script_key_fam,
-    internal_keys.key_index AS script_key_index, key_group_info.genesis_sig, 
-    key_group_info.tweaked_group_key, key_group_info.raw_key AS group_key_raw,
-    key_group_info.key_family AS group_key_family, key_group_info.key_index AS group_key_index,
+    internal_keys.raw_key AS script_key_raw,
+    internal_keys.key_family AS script_key_fam,
+    internal_keys.key_index AS script_key_index,
+    internal_keys.tapscript_preimage AS script_key_tapscript_preimage,
+    internal_keys.tapscript_preimage_type AS script_key_tapscript_preimage_type,
+    key_group_info.genesis_sig, 
+    key_group_info.tweaked_group_key,
+    key_group_info.raw_key AS group_key_raw,
+    key_group_info.key_family AS group_key_family,
+    key_group_info.key_index AS group_key_index,
     script_version, amount, lock_time, relative_lock_time, 
     genesis_info.asset_id, genesis_info.asset_tag, genesis_info.meta_data, 
     genesis_info.output_index AS genesis_output_index, genesis_info.asset_type,
@@ -649,27 +662,29 @@ JOIN internal_keys
 `
 
 type FetchAssetsForBatchRow struct {
-	Version            int32
-	Tweak              []byte
-	TweakedScriptKey   []byte
-	ScriptKeyRaw       []byte
-	ScriptKeyFam       int32
-	ScriptKeyIndex     int32
-	GenesisSig         []byte
-	TweakedGroupKey    []byte
-	GroupKeyRaw        []byte
-	GroupKeyFamily     sql.NullInt32
-	GroupKeyIndex      sql.NullInt32
-	ScriptVersion      int32
-	Amount             int64
-	LockTime           sql.NullInt32
-	RelativeLockTime   sql.NullInt32
-	AssetID            []byte
-	AssetTag           string
-	MetaData           []byte
-	GenesisOutputIndex int32
-	AssetType          int16
-	GenesisPrevOut     []byte
+	Version                        int32
+	Tweak                          []byte
+	TweakedScriptKey               []byte
+	ScriptKeyRaw                   []byte
+	ScriptKeyFam                   int32
+	ScriptKeyIndex                 int32
+	ScriptKeyTapscriptPreimage     []byte
+	ScriptKeyTapscriptPreimageType sql.NullInt32
+	GenesisSig                     []byte
+	TweakedGroupKey                []byte
+	GroupKeyRaw                    []byte
+	GroupKeyFamily                 sql.NullInt32
+	GroupKeyIndex                  sql.NullInt32
+	ScriptVersion                  int32
+	Amount                         int64
+	LockTime                       sql.NullInt32
+	RelativeLockTime               sql.NullInt32
+	AssetID                        []byte
+	AssetTag                       string
+	MetaData                       []byte
+	GenesisOutputIndex             int32
+	AssetType                      int16
+	GenesisPrevOut                 []byte
 }
 
 // We use a LEFT JOIN here as not every asset has a group key, so this'll
@@ -692,6 +707,8 @@ func (q *Queries) FetchAssetsForBatch(ctx context.Context, rawKey []byte) ([]Fet
 			&i.ScriptKeyRaw,
 			&i.ScriptKeyFam,
 			&i.ScriptKeyIndex,
+			&i.ScriptKeyTapscriptPreimage,
+			&i.ScriptKeyTapscriptPreimageType,
 			&i.GenesisSig,
 			&i.TweakedGroupKey,
 			&i.GroupKeyRaw,
@@ -789,7 +806,7 @@ func (q *Queries) FetchGenesisPointByAnchorTx(ctx context.Context, anchorTxID sq
 }
 
 const fetchManagedUTXO = `-- name: FetchManagedUTXO :one
-SELECT utxo_id, outpoint, amt_sats, internal_key_id, tapscript_sibling, taro_root, txn_id, key_id, raw_key, key_family, key_index
+SELECT utxo_id, outpoint, amt_sats, internal_key_id, tapscript_sibling, taro_root, txn_id, key_id, raw_key, key_family, key_index, tapscript_preimage, tapscript_preimage_type
 FROM managed_utxos utxos
 JOIN internal_keys keys
     ON utxos.internal_key_id = keys.key_id
@@ -805,17 +822,19 @@ type FetchManagedUTXOParams struct {
 }
 
 type FetchManagedUTXORow struct {
-	UtxoID           int32
-	Outpoint         []byte
-	AmtSats          int64
-	InternalKeyID    int32
-	TapscriptSibling []byte
-	TaroRoot         []byte
-	TxnID            int32
-	KeyID            int32
-	RawKey           []byte
-	KeyFamily        int32
-	KeyIndex         int32
+	UtxoID                int32
+	Outpoint              []byte
+	AmtSats               int64
+	InternalKeyID         int32
+	TapscriptSibling      []byte
+	TaroRoot              []byte
+	TxnID                 int32
+	KeyID                 int32
+	RawKey                []byte
+	KeyFamily             int32
+	KeyIndex              int32
+	TapscriptPreimage     []byte
+	TapscriptPreimageType sql.NullInt32
 }
 
 func (q *Queries) FetchManagedUTXO(ctx context.Context, arg FetchManagedUTXOParams) (FetchManagedUTXORow, error) {
@@ -833,29 +852,33 @@ func (q *Queries) FetchManagedUTXO(ctx context.Context, arg FetchManagedUTXOPara
 		&i.RawKey,
 		&i.KeyFamily,
 		&i.KeyIndex,
+		&i.TapscriptPreimage,
+		&i.TapscriptPreimageType,
 	)
 	return i, err
 }
 
 const fetchManagedUTXOs = `-- name: FetchManagedUTXOs :many
-SELECT utxo_id, outpoint, amt_sats, internal_key_id, tapscript_sibling, taro_root, txn_id, key_id, raw_key, key_family, key_index
+SELECT utxo_id, outpoint, amt_sats, internal_key_id, tapscript_sibling, taro_root, txn_id, key_id, raw_key, key_family, key_index, tapscript_preimage, tapscript_preimage_type
 FROM managed_utxos utxos
 JOIN internal_keys keys
     ON utxos.internal_key_id = keys.key_id
 `
 
 type FetchManagedUTXOsRow struct {
-	UtxoID           int32
-	Outpoint         []byte
-	AmtSats          int64
-	InternalKeyID    int32
-	TapscriptSibling []byte
-	TaroRoot         []byte
-	TxnID            int32
-	KeyID            int32
-	RawKey           []byte
-	KeyFamily        int32
-	KeyIndex         int32
+	UtxoID                int32
+	Outpoint              []byte
+	AmtSats               int64
+	InternalKeyID         int32
+	TapscriptSibling      []byte
+	TaroRoot              []byte
+	TxnID                 int32
+	KeyID                 int32
+	RawKey                []byte
+	KeyFamily             int32
+	KeyIndex              int32
+	TapscriptPreimage     []byte
+	TapscriptPreimageType sql.NullInt32
 }
 
 func (q *Queries) FetchManagedUTXOs(ctx context.Context) ([]FetchManagedUTXOsRow, error) {
@@ -879,6 +902,8 @@ func (q *Queries) FetchManagedUTXOs(ctx context.Context) ([]FetchManagedUTXOsRow
 			&i.RawKey,
 			&i.KeyFamily,
 			&i.KeyIndex,
+			&i.TapscriptPreimage,
+			&i.TapscriptPreimageType,
 		); err != nil {
 			return nil, err
 		}
@@ -894,7 +919,7 @@ func (q *Queries) FetchManagedUTXOs(ctx context.Context) ([]FetchManagedUTXOsRow
 }
 
 const fetchMintingBatchesByInverseState = `-- name: FetchMintingBatchesByInverseState :many
-SELECT batch_id, batch_state, minting_tx_psbt, change_output_index, genesis_id, height_hint, creation_time_unix, key_id, raw_key, key_family, key_index
+SELECT batch_id, batch_state, minting_tx_psbt, change_output_index, genesis_id, height_hint, creation_time_unix, key_id, raw_key, key_family, key_index, tapscript_preimage, tapscript_preimage_type
 FROM asset_minting_batches batches
 JOIN internal_keys keys
     ON batches.batch_id = keys.key_id
@@ -902,17 +927,19 @@ WHERE batches.batch_state != $1
 `
 
 type FetchMintingBatchesByInverseStateRow struct {
-	BatchID           int32
-	BatchState        int16
-	MintingTxPsbt     []byte
-	ChangeOutputIndex sql.NullInt32
-	GenesisID         sql.NullInt32
-	HeightHint        int32
-	CreationTimeUnix  time.Time
-	KeyID             int32
-	RawKey            []byte
-	KeyFamily         int32
-	KeyIndex          int32
+	BatchID               int32
+	BatchState            int16
+	MintingTxPsbt         []byte
+	ChangeOutputIndex     sql.NullInt32
+	GenesisID             sql.NullInt32
+	HeightHint            int32
+	CreationTimeUnix      time.Time
+	KeyID                 int32
+	RawKey                []byte
+	KeyFamily             int32
+	KeyIndex              int32
+	TapscriptPreimage     []byte
+	TapscriptPreimageType sql.NullInt32
 }
 
 func (q *Queries) FetchMintingBatchesByInverseState(ctx context.Context, batchState int16) ([]FetchMintingBatchesByInverseStateRow, error) {
@@ -936,6 +963,8 @@ func (q *Queries) FetchMintingBatchesByInverseState(ctx context.Context, batchSt
 			&i.RawKey,
 			&i.KeyFamily,
 			&i.KeyIndex,
+			&i.TapscriptPreimage,
+			&i.TapscriptPreimageType,
 		); err != nil {
 			return nil, err
 		}
@@ -1341,6 +1370,8 @@ SELECT
     internal_keys.raw_key AS script_key_raw,
     internal_keys.key_family AS script_key_fam,
     internal_keys.key_index AS script_key_index,
+    internal_keys.tapscript_preimage AS script_key_tapscript_preimage,
+    internal_keys.tapscript_preimage_type AS script_key_tapscript_preimage_type,
     key_group_info_view.genesis_sig, 
     key_group_info_view.tweaked_group_key,
     key_group_info_view.raw_key AS group_key_raw,
@@ -1391,36 +1422,38 @@ type QueryAssetsParams struct {
 }
 
 type QueryAssetsRow struct {
-	AssetPrimaryKey          int32
-	GenesisID                int32
-	Version                  int32
-	ScriptKeyTweak           []byte
-	TweakedScriptKey         []byte
-	ScriptKeyRaw             []byte
-	ScriptKeyFam             int32
-	ScriptKeyIndex           int32
-	GenesisSig               []byte
-	TweakedGroupKey          []byte
-	GroupKeyRaw              []byte
-	GroupKeyFamily           sql.NullInt32
-	GroupKeyIndex            sql.NullInt32
-	ScriptVersion            int32
-	Amount                   int64
-	LockTime                 sql.NullInt32
-	RelativeLockTime         sql.NullInt32
-	AssetID                  []byte
-	AssetTag                 string
-	MetaData                 []byte
-	GenesisOutputIndex       int32
-	AssetType                int16
-	GenesisPrevOut           []byte
-	AnchorTx                 []byte
-	AnchorTxid               []byte
-	AnchorBlockHash          []byte
-	AnchorOutpoint           []byte
-	AnchorInternalKey        []byte
-	SplitCommitmentRootHash  []byte
-	SplitCommitmentRootValue sql.NullInt64
+	AssetPrimaryKey                int32
+	GenesisID                      int32
+	Version                        int32
+	ScriptKeyTweak                 []byte
+	TweakedScriptKey               []byte
+	ScriptKeyRaw                   []byte
+	ScriptKeyFam                   int32
+	ScriptKeyIndex                 int32
+	ScriptKeyTapscriptPreimage     []byte
+	ScriptKeyTapscriptPreimageType sql.NullInt32
+	GenesisSig                     []byte
+	TweakedGroupKey                []byte
+	GroupKeyRaw                    []byte
+	GroupKeyFamily                 sql.NullInt32
+	GroupKeyIndex                  sql.NullInt32
+	ScriptVersion                  int32
+	Amount                         int64
+	LockTime                       sql.NullInt32
+	RelativeLockTime               sql.NullInt32
+	AssetID                        []byte
+	AssetTag                       string
+	MetaData                       []byte
+	GenesisOutputIndex             int32
+	AssetType                      int16
+	GenesisPrevOut                 []byte
+	AnchorTx                       []byte
+	AnchorTxid                     []byte
+	AnchorBlockHash                []byte
+	AnchorOutpoint                 []byte
+	AnchorInternalKey              []byte
+	SplitCommitmentRootHash        []byte
+	SplitCommitmentRootValue       sql.NullInt64
 }
 
 // We use a LEFT JOIN here as not every asset has a group key, so this'll
@@ -1454,6 +1487,8 @@ func (q *Queries) QueryAssets(ctx context.Context, arg QueryAssetsParams) ([]Que
 			&i.ScriptKeyRaw,
 			&i.ScriptKeyFam,
 			&i.ScriptKeyIndex,
+			&i.ScriptKeyTapscriptPreimage,
+			&i.ScriptKeyTapscriptPreimageType,
 			&i.GenesisSig,
 			&i.TweakedGroupKey,
 			&i.GroupKeyRaw,
@@ -1710,9 +1745,9 @@ func (q *Queries) UpsertGenesisPoint(ctx context.Context, prevOut []byte) (int32
 
 const upsertInternalKey = `-- name: UpsertInternalKey :one
 INSERT INTO internal_keys (
-    raw_key,  key_family, key_index
+    raw_key,  key_family, key_index, tapscript_preimage, tapscript_preimage_type
 ) VALUES (
-    $1, $2, $3
+    $1, $2, $3, $4, $5
 ) ON CONFLICT (raw_key)
     -- This is a NOP, raw_key is the unique field that caused the conflict.
     DO UPDATE SET raw_key = EXCLUDED.raw_key
@@ -1720,13 +1755,21 @@ RETURNING key_id
 `
 
 type UpsertInternalKeyParams struct {
-	RawKey    []byte
-	KeyFamily int32
-	KeyIndex  int32
+	RawKey                []byte
+	KeyFamily             int32
+	KeyIndex              int32
+	TapscriptPreimage     []byte
+	TapscriptPreimageType sql.NullInt32
 }
 
 func (q *Queries) UpsertInternalKey(ctx context.Context, arg UpsertInternalKeyParams) (int32, error) {
-	row := q.db.QueryRowContext(ctx, upsertInternalKey, arg.RawKey, arg.KeyFamily, arg.KeyIndex)
+	row := q.db.QueryRowContext(ctx, upsertInternalKey,
+		arg.RawKey,
+		arg.KeyFamily,
+		arg.KeyIndex,
+		arg.TapscriptPreimage,
+		arg.TapscriptPreimageType,
+	)
 	var key_id int32
 	err := row.Scan(&key_id)
 	return key_id, err

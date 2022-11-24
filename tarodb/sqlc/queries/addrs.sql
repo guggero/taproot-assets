@@ -13,9 +13,13 @@ SELECT
     raw_script_keys.raw_key AS raw_script_key,
     raw_script_keys.key_family AS script_key_family,
     raw_script_keys.key_index AS script_key_index,
+    raw_script_keys.tapscript_preimage AS script_key_tapscript_preimage,
+    raw_script_keys.tapscript_preimage_type AS script_key_tapscript_preimage_type,
     taproot_keys.raw_key AS raw_taproot_key, 
     taproot_keys.key_family AS taproot_key_family,
-    taproot_keys.key_index AS taproot_key_index
+    taproot_keys.key_index AS taproot_key_index,
+    taproot_keys.tapscript_preimage AS taproot_key_tapscript_preimage,
+    taproot_keys.tapscript_preimage_type AS taproot_key_tapscript_preimage_type
 FROM addrs
 JOIN script_keys
     ON addrs.script_key_id = script_keys.script_key_id
@@ -39,9 +43,13 @@ SELECT
     raw_script_keys.raw_key as raw_script_key,
     raw_script_keys.key_family AS script_key_family,
     raw_script_keys.key_index AS script_key_index,
+    raw_script_keys.tapscript_preimage AS script_key_tapscript_preimage,
+    raw_script_keys.tapscript_preimage_type AS script_key_tapscript_preimage_type,
     taproot_keys.raw_key AS raw_taproot_key,
     taproot_keys.key_family AS taproot_key_family,
-    taproot_keys.key_index AS taproot_key_index
+    taproot_keys.key_index AS taproot_key_index,
+    taproot_keys.tapscript_preimage AS taproot_key_tapscript_preimage,
+    taproot_keys.tapscript_preimage_type AS taproot_key_tapscript_preimage_type
 FROM addrs
 JOIN script_keys
   ON addrs.script_key_id = script_keys.script_key_id

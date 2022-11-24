@@ -66,7 +66,16 @@ CREATE TABLE IF NOT EXISTS internal_keys (
 
     key_family INTEGER NOT NULL,
 
-    key_index INTEGER NOT NULL
+    key_index INTEGER NOT NULL,
+
+    -- The tapscript pre-image is optional. If this key is a batch or other
+    -- Bitcoin level internal key then the pre-image is actually the tapscript
+    -- sibling pre-image. If this is an asset level internal key of a script key
+    -- then this is the pre-image of the root element of the tapscript tree.    
+    tapscript_preimage BLOB,
+
+    -- The type of the tapscript pre-image, can either be leaf or branch.
+    tapscript_preimage_type INTEGER
 );
 
 -- asset_groups stores information related to the asset group key for a
