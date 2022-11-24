@@ -93,6 +93,15 @@ service Taro {
     proof file information the receiver needs to fully receive the asset.
     */
     rpc SendAsset (SendAssetRequest) returns (SendAssetResponse);
+
+    /*
+    AddTapscriptPreimage derives a new key that can be used as the internal key
+    for a Bitcoin level output key or an asset level script key. The tapscript
+    pre-image information is stored with the key in order to allow script spends
+    as well as key spends.
+    */
+    rpc AddTapscriptPreimage (AddTapscriptPreimageRequest)
+        returns (AddTapscriptPreimageResponse);
 }
 
 enum AssetType {
@@ -584,4 +593,21 @@ message SendAssetResponse {
     TaroTransfer taro_transfer = 4;
 
     int64 total_fee_sats = 5;
+}
+
+enum TapscriptPreimageType {
+    PREIMAGE_TYPE_UNKNOWN = 0;
+    PREIMAGE_TYPE_LEAF = 1;
+    PREIMAGE_TYPE_BRANCH = 2;
+}
+
+message AddTapscriptPreimageRequest {
+    TapscriptPreimageType type = 1;
+    bytes preimage = 2;
+}
+
+message AddTapscriptPreimageResponse {
+    bytes raw_public_key = 1;
+    uint32 key_family = 2;
+    uint32 key_index = 3;
 }

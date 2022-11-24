@@ -77,6 +77,12 @@ type TaroClient interface {
 	//The method returns information w.r.t the on chain send, as well as the
 	//proof file information the receiver needs to fully receive the asset.
 	SendAsset(ctx context.Context, in *SendAssetRequest, opts ...grpc.CallOption) (*SendAssetResponse, error)
+	//
+	//AddTapscriptPreimage derives a new key that can be used as the internal key
+	//for a Bitcoin level output key or an asset level script key. The tapscript
+	//pre-image information is stored with the key in order to allow script spends
+	//as well as key spends.
+	AddTapscriptPreimage(ctx context.Context, in *AddTapscriptPreimageRequest, opts ...grpc.CallOption) (*AddTapscriptPreimageResponse, error)
 }
 
 type taroClient struct {
@@ -222,6 +228,15 @@ func (c *taroClient) SendAsset(ctx context.Context, in *SendAssetRequest, opts .
 	return out, nil
 }
 
+func (c *taroClient) AddTapscriptPreimage(ctx context.Context, in *AddTapscriptPreimageRequest, opts ...grpc.CallOption) (*AddTapscriptPreimageResponse, error) {
+	out := new(AddTapscriptPreimageResponse)
+	err := c.cc.Invoke(ctx, "/tarorpc.Taro/AddTapscriptPreimage", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TaroServer is the server API for Taro service.
 // All implementations must embed UnimplementedTaroServer
 // for forward compatibility
@@ -285,6 +300,12 @@ type TaroServer interface {
 	//The method returns information w.r.t the on chain send, as well as the
 	//proof file information the receiver needs to fully receive the asset.
 	SendAsset(context.Context, *SendAssetRequest) (*SendAssetResponse, error)
+	//
+	//AddTapscriptPreimage derives a new key that can be used as the internal key
+	//for a Bitcoin level output key or an asset level script key. The tapscript
+	//pre-image information is stored with the key in order to allow script spends
+	//as well as key spends.
+	AddTapscriptPreimage(context.Context, *AddTapscriptPreimageRequest) (*AddTapscriptPreimageResponse, error)
 	mustEmbedUnimplementedTaroServer()
 }
 
@@ -336,6 +357,9 @@ func (UnimplementedTaroServer) ImportProof(context.Context, *ImportProofRequest)
 }
 func (UnimplementedTaroServer) SendAsset(context.Context, *SendAssetRequest) (*SendAssetResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SendAsset not implemented")
+}
+func (UnimplementedTaroServer) AddTapscriptPreimage(context.Context, *AddTapscriptPreimageRequest) (*AddTapscriptPreimageResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AddTapscriptPreimage not implemented")
 }
 func (UnimplementedTaroServer) mustEmbedUnimplementedTaroServer() {}
 
@@ -620,6 +644,24 @@ func _Taro_SendAsset_Handler(srv interface{}, ctx context.Context, dec func(inte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Taro_AddTapscriptPreimage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddTapscriptPreimageRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TaroServer).AddTapscriptPreimage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tarorpc.Taro/AddTapscriptPreimage",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TaroServer).AddTapscriptPreimage(ctx, req.(*AddTapscriptPreimageRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Taro_ServiceDesc is the grpc.ServiceDesc for Taro service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -686,6 +728,10 @@ var Taro_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SendAsset",
 			Handler:    _Taro_SendAsset_Handler,
+		},
+		{
+			MethodName: "AddTapscriptPreimage",
+			Handler:    _Taro_AddTapscriptPreimage_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

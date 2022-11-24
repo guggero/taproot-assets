@@ -1055,3 +1055,14 @@ func (r *rpcServer) SendAsset(ctx context.Context,
 		TotalFeeSats: int64(resp.TotalFees),
 	}, nil
 }
+
+// AddTapscriptPreimage derives a new key that can be used as the internal key
+// for a Bitcoin level output key or an asset level script key. The tapscript
+// pre-image information is stored with the key in order to allow script spends
+// as well as key spends.
+func (r *rpcServer) AddTapscriptPreimage(ctx context.Context,
+	in *tarorpc.AddTapscriptPreimageRequest) (
+	*tarorpc.AddTapscriptPreimageResponse, error) {
+
+	return nil, nil
+}
