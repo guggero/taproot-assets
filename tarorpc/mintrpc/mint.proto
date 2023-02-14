@@ -28,6 +28,8 @@ service Mint {
     pending and cancelled batches.
     */
     rpc ListBatches (ListBatchRequest) returns (ListBatchResponse);
+
+    rpc PauseAutoBatch (PauseAutoBatchRequest) returns (PauseAutoBatchResponse);
 }
 
 message MintAsset {
@@ -124,4 +126,10 @@ message ListBatchRequest {
 
 message ListBatchResponse {
     repeated MintingBatch batches = 1;
+}
+
+message PauseAutoBatchRequest {
+}
+
+message PauseAutoBatchResponse {
 }

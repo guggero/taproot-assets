@@ -32,6 +32,7 @@ type MintClient interface {
 	//ListBatches lists the set of batches submitted to the daemon, including
 	//pending and cancelled batches.
 	ListBatches(ctx context.Context, in *ListBatchRequest, opts ...grpc.CallOption) (*ListBatchResponse, error)
+	PauseAutoBatch(ctx context.Context, in *PauseAutoBatchRequest, opts ...grpc.CallOption) (*PauseAutoBatchResponse, error)
 }
 
 type mintClient struct {
@@ -78,6 +79,15 @@ func (c *mintClient) ListBatches(ctx context.Context, in *ListBatchRequest, opts
 	return out, nil
 }
 
+func (c *mintClient) PauseAutoBatch(ctx context.Context, in *PauseAutoBatchRequest, opts ...grpc.CallOption) (*PauseAutoBatchResponse, error) {
+	out := new(PauseAutoBatchResponse)
+	err := c.cc.Invoke(ctx, "/mintrpc.Mint/PauseAutoBatch", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MintServer is the server API for Mint service.
 // All implementations must embed UnimplementedMintServer
 // for forward compatibility
@@ -96,6 +106,7 @@ type MintServer interface {
 	//ListBatches lists the set of batches submitted to the daemon, including
 	//pending and cancelled batches.
 	ListBatches(context.Context, *ListBatchRequest) (*ListBatchResponse, error)
+	PauseAutoBatch(context.Context, *PauseAutoBatchRequest) (*PauseAutoBatchResponse, error)
 	mustEmbedUnimplementedMintServer()
 }
 
@@ -114,6 +125,9 @@ func (UnimplementedMintServer) CancelBatch(context.Context, *CancelBatchRequest)
 }
 func (UnimplementedMintServer) ListBatches(context.Context, *ListBatchRequest) (*ListBatchResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListBatches not implemented")
+}
+func (UnimplementedMintServer) PauseAutoBatch(context.Context, *PauseAutoBatchRequest) (*PauseAutoBatchResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PauseAutoBatch not implemented")
 }
 func (UnimplementedMintServer) mustEmbedUnimplementedMintServer() {}
 
@@ -200,6 +214,24 @@ func _Mint_ListBatches_Handler(srv interface{}, ctx context.Context, dec func(in
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Mint_PauseAutoBatch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PauseAutoBatchRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MintServer).PauseAutoBatch(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mintrpc.Mint/PauseAutoBatch",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MintServer).PauseAutoBatch(ctx, req.(*PauseAutoBatchRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Mint_ServiceDesc is the grpc.ServiceDesc for Mint service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -222,6 +254,10 @@ var Mint_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListBatches",
 			Handler:    _Mint_ListBatches_Handler,
+		},
+		{
+			MethodName: "PauseAutoBatch",
+			Handler:    _Mint_PauseAutoBatch_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

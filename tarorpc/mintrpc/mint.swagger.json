@@ -147,6 +147,38 @@
           "Mint"
         ]
       }
+    },
+    "/v1/taro/mint/batch/pause": {
+      "post": {
+        "operationId": "Mint_PauseAutoBatch",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/mintrpcPauseAutoBatchResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/mintrpcPauseAutoBatchRequest"
+            }
+          }
+        ],
+        "tags": [
+          "Mint"
+        ]
+      }
     }
   },
   "definitions": {
@@ -272,6 +304,12 @@
           "description": "The state of the batch."
         }
       }
+    },
+    "mintrpcPauseAutoBatchRequest": {
+      "type": "object"
+    },
+    "mintrpcPauseAutoBatchResponse": {
+      "type": "object"
     },
     "protobufAny": {
       "type": "object",

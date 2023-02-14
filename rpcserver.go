@@ -159,6 +159,10 @@ var (
 			Entity: "mint",
 			Action: "read",
 		}},
+		"/mintrpc.Mint/PauseAutoBatch": {{
+			Entity: "assets",
+			Action: "write",
+		}},
 		"/universerpc.Universe/AssetRoots": {{
 			Entity: "universe",
 			Action: "read",
@@ -1858,6 +1862,15 @@ func (r *rpcServer) SubscribeSendAssetEventNtfns(
 			return nil
 		}
 	}
+}
+
+func (r *rpcServer) PauseAutoBatch(ctx context.Context,
+	in *mintrpc.PauseAutoBatchRequest) (*mintrpc.PauseAutoBatchResponse,
+	error) {
+
+	r.cfg.AssetMinter.PauseAutoBatch()
+
+	return &mintrpc.PauseAutoBatchResponse{}, nil
 }
 
 // marshallSendAssetEvent maps a ChainPorter event to its RPC counterpart.

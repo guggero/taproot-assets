@@ -36,6 +36,8 @@ type Planter interface {
 	// details of a specific batch.
 	ListBatches(batchKey *btcec.PublicKey) ([]*MintingBatch, error)
 
+	PauseAutoBatch()
+
 	// CancelSeedling attempts to cancel the creation of a new asset
 	// identified by its name. If the seedling has already progressed to a
 	// point where the genesis PSBT has been broadcasted, an error is

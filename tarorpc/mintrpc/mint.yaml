@@ -17,3 +17,7 @@ http:
 
     - selector: mintrpc.Mint.ListBatches
       get: "/v1/taro/assets/mint/batches/{batch_key}"
+
+    - selector: mintrpc.Mint.PauseAutoBatch
+      post: "/v1/taro/mint/batch/pause"
+      body: "*"
