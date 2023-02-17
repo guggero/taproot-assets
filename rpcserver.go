@@ -163,6 +163,10 @@ var (
 			Entity: "assets",
 			Action: "write",
 		}},
+		"/mintrpc.Mint/PrepareExternalAnchor": {{
+			Entity: "assets",
+			Action: "write",
+		}},
 		"/universerpc.Universe/AssetRoots": {{
 			Entity: "universe",
 			Action: "read",
@@ -421,6 +425,10 @@ func (r *rpcServer) DebugLevel(ctx context.Context,
 func (r *rpcServer) MintAsset(ctx context.Context,
 	req *mintrpc.MintAssetRequest) (*mintrpc.MintAssetResponse, error) {
 
+	if req.Asset == nil {
+		return nil, fmt.Errorf("asset is missing")
+	}
+
 	// Using a specific group key implies disabling emission.
 	if req.EnableEmission && len(req.Asset.GroupKey) != 0 {
 		return nil, fmt.Errorf("must disable emission")
@@ -557,6 +565,35 @@ func (r *rpcServer) ListBatches(_ context.Context,
 
 	return &mintrpc.ListBatchResponse{
 		Batches: rpcBatches,
+	}, nil
+}
+
+func (r *rpcServer) PrepareExternalAnchor(_ context.Context,
+	req *mintrpc.PrepareExternalAnchorRequest) (
+	*mintrpc.PrepareExternalAnchorResponse, error) {
+
+	// If the user provided a batch key, we'll attempt to parse it.
+	batchKey, err := btcec.ParsePubKey(req.BatchKey)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse batch key: %w", err)
+	}
+
+	batch, err := r.cfg.AssetMinter.CultivateExternally(batchKey)
+	if err != nil {
+		return nil, fmt.Errorf("unable to prepare batch: %w", err)
+	}
+
+	if batch.RootAssetCommitment == nil {
+		return nil, fmt.Errorf("batch not ready, commitment missing")
+	}
+	taroLeaf := batch.RootAssetCommitment.TapLeaf()
+
+	return &mintrpc.PrepareExternalAnchorResponse{
+		Batch: marshalMintingBatch(batch),
+		TaroTapLeaf: &tarorpc.TapLeaf{
+			Version: uint32(taroLeaf.LeafVersion),
+			Script:  taroLeaf.Script,
+		},
 	}, nil
 }
 

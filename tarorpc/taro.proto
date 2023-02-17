@@ -757,3 +757,8 @@ message FetchAssetMetaRequest {
         bytes meta_hash = 2;
     }
 }
+
+message TapLeaf {
+    uint32 version = 1;
+    bytes script = 2;
+}

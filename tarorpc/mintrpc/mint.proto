@@ -29,6 +29,9 @@ service Mint {
     */
     rpc ListBatches (ListBatchRequest) returns (ListBatchResponse);
 
+    rpc PrepareExternalAnchor (PrepareExternalAnchorRequest)
+        returns (PrepareExternalAnchorResponse);
+
     rpc PauseAutoBatch (PauseAutoBatchRequest) returns (PauseAutoBatchResponse);
 }
 
@@ -126,6 +129,17 @@ message ListBatchRequest {
 
 message ListBatchResponse {
     repeated MintingBatch batches = 1;
+}
+
+message PrepareExternalAnchorRequest {
+    // The public key of the batch.
+    bytes batch_key = 1;
+}
+
+message PrepareExternalAnchorResponse {
+    MintingBatch batch = 1;
+
+    tarorpc.TapLeaf taro_tap_leaf = 2;
 }
 
 message PauseAutoBatchRequest {
