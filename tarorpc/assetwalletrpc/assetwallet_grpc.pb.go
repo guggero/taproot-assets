@@ -47,6 +47,8 @@ type AssetWalletClient interface {
 	//key) and stores them both in the database to make sure they are identified
 	//as local keys later on when importing proofs.
 	NextScriptKey(ctx context.Context, in *NextScriptKeyRequest, opts ...grpc.CallOption) (*NextScriptKeyResponse, error)
+	PrepareReAnchor(ctx context.Context, in *PrepareReAnchorRequest, opts ...grpc.CallOption) (*PrepareReAnchorResponse, error)
+	ReAnchorAssets(ctx context.Context, in *ReAnchorRequest, opts ...grpc.CallOption) (*ReAnchorResponse, error)
 }
 
 type assetWalletClient struct {
@@ -102,6 +104,24 @@ func (c *assetWalletClient) NextScriptKey(ctx context.Context, in *NextScriptKey
 	return out, nil
 }
 
+func (c *assetWalletClient) PrepareReAnchor(ctx context.Context, in *PrepareReAnchorRequest, opts ...grpc.CallOption) (*PrepareReAnchorResponse, error) {
+	out := new(PrepareReAnchorResponse)
+	err := c.cc.Invoke(ctx, "/assetwalletrpc.AssetWallet/PrepareReAnchor", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *assetWalletClient) ReAnchorAssets(ctx context.Context, in *ReAnchorRequest, opts ...grpc.CallOption) (*ReAnchorResponse, error) {
+	out := new(ReAnchorResponse)
+	err := c.cc.Invoke(ctx, "/assetwalletrpc.AssetWallet/ReAnchorAssets", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AssetWalletServer is the server API for AssetWallet service.
 // All implementations must embed UnimplementedAssetWalletServer
 // for forward compatibility
@@ -134,6 +154,8 @@ type AssetWalletServer interface {
 	//key) and stores them both in the database to make sure they are identified
 	//as local keys later on when importing proofs.
 	NextScriptKey(context.Context, *NextScriptKeyRequest) (*NextScriptKeyResponse, error)
+	PrepareReAnchor(context.Context, *PrepareReAnchorRequest) (*PrepareReAnchorResponse, error)
+	ReAnchorAssets(context.Context, *ReAnchorRequest) (*ReAnchorResponse, error)
 	mustEmbedUnimplementedAssetWalletServer()
 }
 
@@ -155,6 +177,12 @@ func (UnimplementedAssetWalletServer) NextInternalKey(context.Context, *NextInte
 }
 func (UnimplementedAssetWalletServer) NextScriptKey(context.Context, *NextScriptKeyRequest) (*NextScriptKeyResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method NextScriptKey not implemented")
+}
+func (UnimplementedAssetWalletServer) PrepareReAnchor(context.Context, *PrepareReAnchorRequest) (*PrepareReAnchorResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PrepareReAnchor not implemented")
+}
+func (UnimplementedAssetWalletServer) ReAnchorAssets(context.Context, *ReAnchorRequest) (*ReAnchorResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReAnchorAssets not implemented")
 }
 func (UnimplementedAssetWalletServer) mustEmbedUnimplementedAssetWalletServer() {}
 
@@ -259,6 +287,42 @@ func _AssetWallet_NextScriptKey_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AssetWallet_PrepareReAnchor_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PrepareReAnchorRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AssetWalletServer).PrepareReAnchor(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/assetwalletrpc.AssetWallet/PrepareReAnchor",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AssetWalletServer).PrepareReAnchor(ctx, req.(*PrepareReAnchorRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AssetWallet_ReAnchorAssets_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReAnchorRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AssetWalletServer).ReAnchorAssets(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/assetwalletrpc.AssetWallet/ReAnchorAssets",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AssetWalletServer).ReAnchorAssets(ctx, req.(*ReAnchorRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AssetWallet_ServiceDesc is the grpc.ServiceDesc for AssetWallet service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -285,6 +349,14 @@ var AssetWallet_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "NextScriptKey",
 			Handler:    _AssetWallet_NextScriptKey_Handler,
+		},
+		{
+			MethodName: "PrepareReAnchor",
+			Handler:    _AssetWallet_PrepareReAnchor_Handler,
+		},
+		{
+			MethodName: "ReAnchorAssets",
+			Handler:    _AssetWallet_ReAnchorAssets_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

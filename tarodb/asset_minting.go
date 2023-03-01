@@ -931,8 +931,9 @@ func (a *AssetMintingStore) AddSproutsToBatch(ctx context.Context,
 // TODO(roasbeef): or could just re-read assets from disk and set the script
 // root manually?
 func (a *AssetMintingStore) CommitSignedGenesisTx(ctx context.Context,
-	batchKey *btcec.PublicKey, genesisPkt *tarogarden.FundedPsbt,
-	anchorOutputIndex uint32, merkleRoot []byte) error {
+	batchKey, internalKey *btcec.PublicKey,
+	genesisPkt *tarogarden.FundedPsbt, anchorOutputIndex uint32,
+	merkleRoot []byte) error {
 
 	// The managed UTXO we'll insert only contains the raw tx of the
 	// genesis packet, so we'll extract that now.
@@ -951,6 +952,7 @@ func (a *AssetMintingStore) CommitSignedGenesisTx(ctx context.Context,
 	genTXID := rawGenTx.TxHash()
 
 	rawBatchKey := batchKey.SerializeCompressed()
+	rawInternalKey := internalKey.SerializeCompressed()
 
 	anchorOutput := rawGenTx.TxOut[anchorOutputIndex]
 	anchorPoint := wire.OutPoint{
@@ -996,11 +998,24 @@ func (a *AssetMintingStore) CommitSignedGenesisTx(ctx context.Context,
 			return fmt.Errorf("unable to insert chain tx: %w", err)
 		}
 
+		// If the internal minting key is different from the batch key,
+		// it means it's a key that we haven't inserted before, as it
+		// comes from an external anchor event.
+		if !internalKey.IsEqual(batchKey) {
+			_, err = q.UpsertInternalKey(ctx, InternalKey{
+				RawKey: rawInternalKey,
+			})
+			if err != nil {
+				return fmt.Errorf("unable to upsert non-batch "+
+					"internal key: %w", err)
+			}
+		}
+
 		// Now that the genesis tx has been updated within the main
 		// batch, we'll create a new managed UTXO for this batch as
 		// this is where all the assets will be anchored within.
 		utxoID, err := q.UpsertManagedUTXO(ctx, RawManagedUTXO{
-			RawKey:     rawBatchKey,
+			RawKey:     rawInternalKey,
 			Outpoint:   anchorOutpoint,
 			AmtSats:    anchorOutput.Value,
 			MerkleRoot: merkleRoot,

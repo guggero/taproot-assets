@@ -43,7 +43,7 @@ var (
 type TarodHarness struct {
 	cfg       *TarodConfig
 	server    *taro.Server
-	clientCfg *tarocfg.Config
+	ClientCfg *tarocfg.Config
 
 	t  *testing.T
 	wg sync.WaitGroup
@@ -62,6 +62,9 @@ type TarodConfig struct {
 	BaseDir     string
 	Interceptor signal.Interceptor
 	LogWriter   *build.RotatingLogWriter
+
+	RPCListener  string
+	RESTListener string
 
 	EnableHashMail      bool
 	HashMailAddr        string
@@ -112,11 +115,19 @@ func NewTarodHarness(t *testing.T, cfg TarodConfig) (*TarodHarness, error) {
 		tarodCfg.Postgres = fixture.GetConfig()
 	}
 
-	tarodCfg.RpcConf.RawRPCListeners = []string{
-		fmt.Sprintf("127.0.0.1:%d", nextAvailablePort()),
+	if cfg.RPCListener != "" {
+		tarodCfg.RpcConf.RawRPCListeners = []string{cfg.RPCListener}
+	} else {
+		tarodCfg.RpcConf.RawRPCListeners = []string{
+			fmt.Sprintf("127.0.0.1:%d", nextAvailablePort()),
+		}
 	}
-	tarodCfg.RpcConf.RawRESTListeners = []string{
-		fmt.Sprintf("127.0.0.1:%d", nextAvailablePort()),
+	if cfg.RESTListener != "" {
+		tarodCfg.RpcConf.RawRPCListeners = []string{cfg.RPCListener}
+	} else {
+		tarodCfg.RpcConf.RawRESTListeners = []string{
+			fmt.Sprintf("127.0.0.1:%d", nextAvailablePort()),
+		}
 	}
 
 	tarodCfg.Lnd = &tarocfg.LndConfig{
@@ -151,7 +162,7 @@ func NewTarodHarness(t *testing.T, cfg TarodConfig) (*TarodHarness, error) {
 
 	return &TarodHarness{
 		cfg:       &cfg,
-		clientCfg: finalCfg,
+		ClientCfg: finalCfg,
 		t:         t,
 	}, nil
 }
@@ -170,7 +181,7 @@ func (hs *TarodHarness) Start(expectErrExit bool) error {
 		mainErrChan = make(chan error, 10)
 	)
 	hs.server, err = tarocfg.CreateServerFromConfig(
-		hs.clientCfg, cfgLogger, hs.cfg.Interceptor, mainErrChan,
+		hs.ClientCfg, cfgLogger, hs.cfg.Interceptor, mainErrChan,
 	)
 	if err != nil {
 		return fmt.Errorf("could not create tarod server: %v", err)
@@ -187,10 +198,10 @@ func (hs *TarodHarness) Start(expectErrExit bool) error {
 	time.Sleep(1 * time.Second)
 
 	// Create our client to interact with the tarod RPC server directly.
-	listenerAddr := hs.clientCfg.RpcConf.RawRPCListeners[0]
+	listenerAddr := hs.ClientCfg.RpcConf.RawRPCListeners[0]
 	rpcConn, err := dialServer(
-		listenerAddr, hs.clientCfg.RpcConf.TLSCertPath,
-		hs.clientCfg.RpcConf.MacaroonPath,
+		listenerAddr, hs.ClientCfg.RpcConf.TLSCertPath,
+		hs.ClientCfg.RpcConf.MacaroonPath,
 	)
 	if err != nil {
 		return fmt.Errorf("could not connect to %v: %v",

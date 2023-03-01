@@ -125,7 +125,7 @@ func WithAssetMetaReveals(
 // NewMintingBlobs takes a set of minting parameters, and produces a series of
 // serialized proof files, which proves the creation/existence of each of the
 // assets within the batch.
-func NewMintingBlobs(params *MintParams,
+func NewMintingBlobs(params *MintParams, tapscriptSibling *TapscriptPreimage,
 	headerVerifier HeaderVerifier,
 	blobOpts ...MintingBlobOption) (AssetBlobs, error) {
 
@@ -139,7 +139,9 @@ func NewMintingBlobs(params *MintParams,
 		return nil, err
 	}
 
-	proofs, err := committedProofs(base, params.TaroRoot, opts)
+	proofs, err := committedProofs(
+		base, params.TaroRoot, tapscriptSibling, opts,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -149,17 +151,20 @@ func NewMintingBlobs(params *MintParams,
 	for key := range proofs {
 		proof := proofs[key]
 
-		// Before we encode the proof file, we'll verify that we
-		// generate a valid proof.
-		if _, err := proof.Verify(ctx, nil, headerVerifier); err != nil {
-			return nil, fmt.Errorf("invalid proof file generated: "+
-				"%w", err)
-		}
-
 		proofBlob, err := encodeAsProofFile(proof)
 		if err != nil {
 			return nil, err
 		}
+
+		// Before we encode the proof file, we'll verify that we
+		// generate a valid proof.
+		if _, err := proof.Verify(ctx, nil, headerVerifier); err != nil {
+			log.Errorf("Invalid proof file generated (%v): %x",
+				err, proofBlob)
+			return nil, fmt.Errorf("invalid proof file generated: "+
+				"%w", err)
+		}
+
 		blobs[key] = proofBlob
 	}
 
@@ -208,6 +213,7 @@ func coreProof(params *BaseProofParams) (*Proof, error) {
 // committedProofs creates a map of proofs, keyed by the script key of each of
 // the assets committed to in the Taro root of the given params.
 func committedProofs(baseProof *Proof, taroRoot *commitment.TaroCommitment,
+	tapscriptSibling *TapscriptPreimage,
 	opts *mintingBlobOpts) (map[asset.SerializedKey]*Proof, error) {
 
 	// For each asset we'll construct the asset specific proof information,
@@ -233,12 +239,9 @@ func committedProofs(baseProof *Proof, taroRoot *commitment.TaroCommitment,
 
 		// With the merkle proof obtained, we can now set that in the
 		// main inclusion proof.
-		//
-		// NOTE: We don't add a TapSiblingPreimage here since we assume
-		// that this minting output ONLY commits to the Taro
-		// commitment.
 		assetProof.InclusionProof.CommitmentProof = &CommitmentProof{
-			Proof: *assetMerkleProof,
+			Proof:              *assetMerkleProof,
+			TapSiblingPreimage: tapscriptSibling,
 		}
 
 		scriptKey := asset.ToSerialized(newAsset.ScriptKey.PubKey)

@@ -6,6 +6,7 @@ import (
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/txscript"
+	"github.com/btcsuite/btcd/wire"
 	"github.com/lightninglabs/taro/asset"
 	"github.com/lightninglabs/taro/commitment"
 	"github.com/lightninglabs/taro/proof"
@@ -35,6 +36,10 @@ type MintingBatch struct {
 
 	// BatchKey is the unique identifier for a batch.
 	BatchKey keychain.KeyDescriptor
+
+	// GenesisOutPoint is the outpoint the genesis anchor transaction is
+	// spending, which adds the required uniqueness to the minted assets.
+	GenesisOutPoint *wire.OutPoint
 
 	// Seedlings is the set of seedlings for this batch. This maps an
 	// asset's name to the seedling itself.
@@ -66,9 +71,15 @@ type MintingBatch struct {
 	// used to commit to the Taro commitment above.
 	mintingPubKey *btcec.PublicKey
 
+	anchorOutputIndex uint32
+
+	mintingInternalKey *btcec.PublicKey
+
 	// taroScriptRoot is the root hash of the Taro commitment. If this is
 	// nil, then the mintingPubKey will be as well.
 	taroScriptRoot []byte
+
+	tapScriptSiblingPreimage *proof.TapscriptPreimage
 }
 
 // TODO(roasbeef): add batch validate method re unique names?

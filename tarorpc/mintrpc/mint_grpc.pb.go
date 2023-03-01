@@ -33,6 +33,7 @@ type MintClient interface {
 	//pending and cancelled batches.
 	ListBatches(ctx context.Context, in *ListBatchRequest, opts ...grpc.CallOption) (*ListBatchResponse, error)
 	PrepareExternalAnchor(ctx context.Context, in *PrepareExternalAnchorRequest, opts ...grpc.CallOption) (*PrepareExternalAnchorResponse, error)
+	ExternalAnchor(ctx context.Context, in *ExternalAnchorRequest, opts ...grpc.CallOption) (*ExternalAnchorResponse, error)
 	PauseAutoBatch(ctx context.Context, in *PauseAutoBatchRequest, opts ...grpc.CallOption) (*PauseAutoBatchResponse, error)
 }
 
@@ -89,6 +90,15 @@ func (c *mintClient) PrepareExternalAnchor(ctx context.Context, in *PrepareExter
 	return out, nil
 }
 
+func (c *mintClient) ExternalAnchor(ctx context.Context, in *ExternalAnchorRequest, opts ...grpc.CallOption) (*ExternalAnchorResponse, error) {
+	out := new(ExternalAnchorResponse)
+	err := c.cc.Invoke(ctx, "/mintrpc.Mint/ExternalAnchor", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *mintClient) PauseAutoBatch(ctx context.Context, in *PauseAutoBatchRequest, opts ...grpc.CallOption) (*PauseAutoBatchResponse, error) {
 	out := new(PauseAutoBatchResponse)
 	err := c.cc.Invoke(ctx, "/mintrpc.Mint/PauseAutoBatch", in, out, opts...)
@@ -117,6 +127,7 @@ type MintServer interface {
 	//pending and cancelled batches.
 	ListBatches(context.Context, *ListBatchRequest) (*ListBatchResponse, error)
 	PrepareExternalAnchor(context.Context, *PrepareExternalAnchorRequest) (*PrepareExternalAnchorResponse, error)
+	ExternalAnchor(context.Context, *ExternalAnchorRequest) (*ExternalAnchorResponse, error)
 	PauseAutoBatch(context.Context, *PauseAutoBatchRequest) (*PauseAutoBatchResponse, error)
 	mustEmbedUnimplementedMintServer()
 }
@@ -139,6 +150,9 @@ func (UnimplementedMintServer) ListBatches(context.Context, *ListBatchRequest) (
 }
 func (UnimplementedMintServer) PrepareExternalAnchor(context.Context, *PrepareExternalAnchorRequest) (*PrepareExternalAnchorResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PrepareExternalAnchor not implemented")
+}
+func (UnimplementedMintServer) ExternalAnchor(context.Context, *ExternalAnchorRequest) (*ExternalAnchorResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ExternalAnchor not implemented")
 }
 func (UnimplementedMintServer) PauseAutoBatch(context.Context, *PauseAutoBatchRequest) (*PauseAutoBatchResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PauseAutoBatch not implemented")
@@ -246,6 +260,24 @@ func _Mint_PrepareExternalAnchor_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Mint_ExternalAnchor_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ExternalAnchorRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MintServer).ExternalAnchor(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mintrpc.Mint/ExternalAnchor",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MintServer).ExternalAnchor(ctx, req.(*ExternalAnchorRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Mint_PauseAutoBatch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(PauseAutoBatchRequest)
 	if err := dec(in); err != nil {
@@ -290,6 +322,10 @@ var Mint_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PrepareExternalAnchor",
 			Handler:    _Mint_PrepareExternalAnchor_Handler,
+		},
+		{
+			MethodName: "ExternalAnchor",
+			Handler:    _Mint_ExternalAnchor_Handler,
 		},
 		{
 			MethodName: "PauseAutoBatch",

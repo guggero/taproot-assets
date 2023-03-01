@@ -17,13 +17,16 @@ import (
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
+	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/davecgh/go-spew/spew"
 	proxy "github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/lightninglabs/taro/address"
 	"github.com/lightninglabs/taro/asset"
 	"github.com/lightninglabs/taro/chanutils"
+	"github.com/lightninglabs/taro/commitment"
 	"github.com/lightninglabs/taro/mssmt"
 	"github.com/lightninglabs/taro/proof"
 	"github.com/lightninglabs/taro/rpcperms"
@@ -143,6 +146,14 @@ var (
 			Entity: "assets",
 			Action: "write",
 		}},
+		"/assetwalletrpc.AssetWallet/PrepareReAnchor": {{
+			Entity: "assets",
+			Action: "write",
+		}},
+		"/assetwalletrpc.AssetWallet/ReAnchorAssets": {{
+			Entity: "assets",
+			Action: "write",
+		}},
 		"/mintrpc.Mint/MintAsset": {{
 			Entity: "mint",
 			Action: "write",
@@ -164,6 +175,10 @@ var (
 			Action: "write",
 		}},
 		"/mintrpc.Mint/PrepareExternalAnchor": {{
+			Entity: "assets",
+			Action: "write",
+		}},
+		"/mintrpc.Mint/ExternalAnchor": {{
 			Entity: "assets",
 			Action: "write",
 		}},
@@ -578,7 +593,15 @@ func (r *rpcServer) PrepareExternalAnchor(_ context.Context,
 		return nil, fmt.Errorf("unable to parse batch key: %w", err)
 	}
 
-	batch, err := r.cfg.AssetMinter.CultivateExternally(batchKey)
+	genesisOutPoint, err := parseOutPoint(req.GenesisOutpoint)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse genesis outpoint: %w",
+			err)
+	}
+
+	batch, err := r.cfg.AssetMinter.CultivateExternally(
+		batchKey, genesisOutPoint,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("unable to prepare batch: %w", err)
 	}
@@ -588,8 +611,13 @@ func (r *rpcServer) PrepareExternalAnchor(_ context.Context,
 	}
 	taroLeaf := batch.RootAssetCommitment.TapLeaf()
 
+	rpcBatch, err := marshalMintingBatch(batch)
+	if err != nil {
+		return nil, err
+	}
+
 	return &mintrpc.PrepareExternalAnchorResponse{
-		Batch: marshalMintingBatch(batch),
+		Batch: rpcBatch,
 		TaroTapLeaf: &tarorpc.TapLeaf{
 			Version: uint32(taroLeaf.LeafVersion),
 			Script:  taroLeaf.Script,
@@ -657,6 +685,202 @@ func (r *rpcServer) checkBalanceOverflow(ctx context.Context,
 	}
 
 	return nil
+}
+
+func (r *rpcServer) ExternalAnchor(_ context.Context,
+	req *mintrpc.ExternalAnchorRequest) (*mintrpc.ExternalAnchorResponse,
+	error) {
+
+	// Parse the user provided batch and internal keys.
+	batchKey, err := btcec.ParsePubKey(req.BatchKey)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse batch key: %w", err)
+	}
+	internalKey, err := btcec.ParsePubKey(req.AnchorInternalKey)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse internal key: %w", err)
+	}
+
+	// Parse the funded PSBT as well.
+	packetReader := bytes.NewReader(req.FundedPacket)
+	fundedPsbt, err := psbt.NewFromRawBytes(packetReader, false)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse funded PSBT: %w", err)
+	}
+
+	leaves := parseTapLeaves(req.AnchorTaprootTree)
+	err = r.cfg.AssetMinter.ConfirmExternalCultivation(
+		batchKey, fundedPsbt, req.ChangeOutputIndex,
+		req.AnchorOutputIndex, internalKey, leaves,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("unable to confirm external "+
+			"cultivation: %w", err)
+	}
+
+	return &mintrpc.ExternalAnchorResponse{}, nil
+}
+
+func (r *rpcServer) PrepareReAnchor(ctx context.Context,
+	req *wrpc.PrepareReAnchorRequest) (*wrpc.PrepareReAnchorResponse,
+	error) {
+
+	outPoint, err := parseOutPoint(req.Outpoint)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse genesis outpoint: %w",
+			err)
+	}
+
+	commitments, err := r.cfg.AssetStore.FetchCommitmentsByAnchor(
+		ctx, outPoint,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("unable to fetch commitments: %w", err)
+	}
+
+	if len(commitments) == 0 {
+		return nil, fmt.Errorf("no commitments found for anchor point")
+	}
+
+	passiveAssets := r.cfg.AssetWallet.ReAnchor(commitments, outPoint)
+	for _, passiveAsset := range passiveAssets {
+		_, err := r.cfg.AssetWallet.SignVirtualPacket(
+			passiveAsset.VPacket,
+			tarofreighter.SkipInputProofVerify(),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("unable to sign virtual "+
+				"packet: %w", err)
+		}
+	}
+
+	newCommitment, err := commitment.NewTaroCommitment()
+	if err != nil {
+		return nil, fmt.Errorf("unable to create commitment: %w", err)
+	}
+
+	for idx := range passiveAssets {
+		passiveAsset := passiveAssets[idx].VPacket.Outputs[0].Asset
+
+		// Ensure that a commitment for this asset exists.
+		assetCommitment, ok := newCommitment.Commitment(passiveAsset)
+		if !ok {
+			assetCommitment, err = commitment.NewAssetCommitment(
+				passiveAsset,
+			)
+			if err != nil {
+				return nil, fmt.Errorf("unable to create "+
+					"commitment for passive asset: %w", err)
+			}
+		}
+		err = assetCommitment.Upsert(passiveAsset)
+		if err != nil {
+			return nil, fmt.Errorf("unable to upsert passive "+
+				"asset into asset commitment: %w", err)
+		}
+
+		err = newCommitment.Upsert(assetCommitment)
+		if err != nil {
+			return nil, fmt.Errorf("unable to upsert passive "+
+				"asset commitment into taro commitment: %w",
+				err)
+		}
+	}
+	taroLeaf := newCommitment.TapLeaf()
+	err = r.cfg.AssetStore.StorePendingPassiveAssets(ctx, passiveAssets)
+	if err != nil {
+		return nil, fmt.Errorf("unable to store passive assets: %w",
+			err)
+	}
+
+	return &wrpc.PrepareReAnchorResponse{
+		TaroTapLeaf: &tarorpc.TapLeaf{
+			Version: uint32(taroLeaf.LeafVersion),
+			Script:  taroLeaf.Script,
+		},
+	}, nil
+}
+func (r *rpcServer) ReAnchor(ctx context.Context,
+	req *wrpc.ReAnchorRequest) (*wrpc.ReAnchorResponse, error) {
+
+	outPoint, err := parseOutPoint(req.Outpoint)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse genesis outpoint: %w",
+			err)
+	}
+	internalKey, err := btcec.ParsePubKey(req.AnchorInternalKey)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse internal key: %w", err)
+	}
+
+	// Parse the funded PSBT as well.
+	packetReader := bytes.NewReader(req.FundedPacket)
+	fundedPsbt, err := psbt.NewFromRawBytes(packetReader, false)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse funded PSBT: %w", err)
+	}
+
+	// Before we continue, we need to calculate the actual, final fees that
+	// were paid for the on-chain transaction.
+	chainFees, err := tarogarden.GetTxFee(fundedPsbt)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get on-chain fees for psbt: "+
+			"%w", err)
+	}
+
+	leaves := parseTapLeaves(req.AnchorTaprootTree)
+	rootHash, siblingLeaf, err := taroscript.IdentifyTapScriptSibling(
+		leaves,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("unable to identify tapscript sibling: "+
+			"%w", err)
+	}
+	var siblingBytes []byte
+	if siblingLeaf != nil {
+		siblingPreimage := proof.NewPreimageFromLeaf(*siblingLeaf)
+		siblingHash, err := siblingPreimage.TapHash()
+		if err != nil {
+			return nil, fmt.Errorf("unable to compute tapscript "+
+				"sibling hash: %w", err)
+		}
+		siblingBytes = siblingHash[:]
+	}
+
+	currentHeight, err := r.cfg.ChainBridge.CurrentHeight(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get current height: %w", err)
+	}
+
+	outboundPkg := &tarofreighter.OutboundParcelDelta{
+		OldAnchorPoint: outPoint,
+		NewAnchorPoint: wire.OutPoint{
+			Hash:  fundedPsbt.UnsignedTx.TxHash(),
+			Index: req.AnchorOutputIndex,
+		},
+		NewInternalKey: keychain.KeyDescriptor{
+			PubKey: internalKey,
+		},
+		TaroRoot:           rootHash[:],
+		AnchorTx:           fundedPsbt.UnsignedTx,
+		AnchorTxHeightHint: currentHeight,
+		TapscriptSibling:   siblingBytes,
+		// TODO(bhandras): use clock.Clock instead.
+		TransferTime: time.Now(),
+		ChainFees:    chainFees,
+	}
+
+	err = r.cfg.AssetStore.LogPendingParcel(ctx, outboundPkg)
+	if err != nil {
+		return nil, fmt.Errorf("unable to log outbound parcel: %w", err)
+	}
+
+	rpcsLog.Infof("ReAnchor: out_point=%v, internal_key=%x, "+
+		"leaves=%v, funded_psbt=%v", outPoint,
+		internalKey.SerializeCompressed(), spew.Sdump(fundedPsbt),
+		leaves)
+
+	return &wrpc.ReAnchorResponse{}, nil
 }
 
 // ListAssets lists the set of assets owned by the target daemon.
@@ -2779,4 +3003,36 @@ func (r *rpcServer) SyncUniverse(ctx context.Context,
 	}
 
 	return r.marshalUniverseDiff(ctx, universeDiff)
+}
+
+// parseOutPoint parses the RPC outpoint into the native counterpart.
+func parseOutPoint(rpcOutPoint *tarorpc.OutPoint) (wire.OutPoint, error) {
+	if rpcOutPoint == nil {
+		return wire.OutPoint{}, fmt.Errorf("outpoint is nil")
+	}
+
+	genesisOutPointHash, err := chainhash.NewHash(rpcOutPoint.Hash)
+	if err != nil {
+		return wire.OutPoint{}, fmt.Errorf("unable to parse outpoint "+
+			"hash: %w", err)
+	}
+	return wire.OutPoint{
+		Hash:  *genesisOutPointHash,
+		Index: rpcOutPoint.Index,
+	}, nil
+}
+
+// parseTapLeaves parses the RPC tap leaves into the native counterpart.
+func parseTapLeaves(rpcLeaves []*tarorpc.TapLeaf) []txscript.TapLeaf {
+	leaves := make([]txscript.TapLeaf, len(rpcLeaves))
+	for idx := range rpcLeaves {
+		leaves[idx] = txscript.TapLeaf{
+			LeafVersion: txscript.TapscriptLeafVersion(
+				rpcLeaves[idx].Version,
+			),
+			Script: rpcLeaves[idx].Script,
+		}
+	}
+
+	return leaves
 }

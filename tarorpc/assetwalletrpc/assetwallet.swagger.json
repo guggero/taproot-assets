@@ -260,18 +260,11 @@
         }
       }
     },
-    "assetwalletrpcOutPoint": {
+    "assetwalletrpcPrepareReAnchorResponse": {
       "type": "object",
       "properties": {
-        "txid": {
-          "type": "string",
-          "format": "byte",
-          "description": "Raw bytes representing the transaction id."
-        },
-        "output_index": {
-          "type": "integer",
-          "format": "int64",
-          "description": "The index of the output on the transaction."
+        "taro_tap_leaf": {
+          "$ref": "#/definitions/tarorpcTapLeaf"
         }
       }
     },
@@ -279,7 +272,7 @@
       "type": "object",
       "properties": {
         "outpoint": {
-          "$ref": "#/definitions/assetwalletrpcOutPoint",
+          "$ref": "#/definitions/tarorpcOutPoint",
           "description": "The bitcoin anchor output on chain that contains the input asset."
         },
         "id": {
@@ -293,6 +286,9 @@
           "description": "The tweaked Taproot output key committing to the possible spending\nconditions of the asset."
         }
       }
+    },
+    "assetwalletrpcReAnchorResponse": {
+      "type": "object"
     },
     "assetwalletrpcSignVirtualPsbtRequest": {
       "type": "object",
@@ -437,6 +433,21 @@
         }
       }
     },
+    "tarorpcOutPoint": {
+      "type": "object",
+      "properties": {
+        "hash": {
+          "type": "string",
+          "format": "byte",
+          "description": "The hash of the transaction."
+        },
+        "index": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The index of the output within the transaction."
+        }
+      }
+    },
     "tarorpcScriptKey": {
       "type": "object",
       "properties": {
@@ -461,6 +472,19 @@
       "properties": {
         "transfer": {
           "$ref": "#/definitions/tarorpcAssetTransfer"
+        }
+      }
+    },
+    "tarorpcTapLeaf": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "script": {
+          "type": "string",
+          "format": "byte"
         }
       }
     },

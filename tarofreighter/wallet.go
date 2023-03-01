@@ -65,6 +65,9 @@ type Wallet interface {
 	FundAddressSend(ctx context.Context,
 		receiverAddrs ...*address.Taro) (*FundedVPacket, error)
 
+	ReAnchor(commitments []*AnchoredCommitment,
+		anchorPoint wire.OutPoint) []*PassiveAssetReanchor
+
 	// FundPacket funds a virtual transaction, selecting assets to spend
 	// in order to pay the given recipient. The selected input is then added
 	// to the given virtual transaction.
@@ -297,18 +300,32 @@ func (f *AssetWallet) FundAddressSend(ctx context.Context,
 	return fundedVPkt, nil
 }
 
+func (f *AssetWallet) ReAnchor(commitments []*AnchoredCommitment,
+	anchorPoint wire.OutPoint) []*PassiveAssetReanchor {
+
+	var allPassiveAssets []*PassiveAssetReanchor
+	for _, anchoredCommitment := range commitments {
+		passiveAssets := f.passiveAssets(
+			anchoredCommitment.Commitment.Commitments(),
+			anchorPoint,
+		)
+		allPassiveAssets = append(allPassiveAssets, passiveAssets...)
+	}
+
+	return allPassiveAssets
+}
+
 // passiveAssetVPacket creates a virtual packet for the given passive asset.
 func (f *AssetWallet) passiveAssetVPacket(passiveAsset *asset.Asset,
 	anchorPoint wire.OutPoint, anchorOutputIndex uint32,
 	internalKey *keychain.KeyDescriptor) *taropsbt.VPacket {
 
 	// Specify virtual input.
-	inputAsset := passiveAsset.Copy()
 	inputPrevId := asset.PrevID{
 		OutPoint: anchorPoint,
 		ID:       inputAsset.ID(),
 		ScriptKey: asset.ToSerialized(
-			inputAsset.ScriptKey.PubKey,
+			passiveAsset.ScriptKey.PubKey,
 		),
 	}
 	vInput := taropsbt.VInput{

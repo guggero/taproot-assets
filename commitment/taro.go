@@ -250,9 +250,9 @@ func (c *TaroCommitment) TapLeaf() txscript.TapLeaf {
 	return txscript.NewBaseTapLeaf(leafScript)
 }
 
-// tapBranchHash takes the tap hashes of the left and right nodes and hashes
+// TapBranchHash takes the tap hashes of the left and right nodes and hashes
 // them into a branch.
-func tapBranchHash(l, r chainhash.Hash) chainhash.Hash {
+func TapBranchHash(l, r chainhash.Hash) chainhash.Hash {
 	if bytes.Compare(l[:], r[:]) > 0 {
 		l, r = r, l
 	}
@@ -286,7 +286,7 @@ func (c *TaroCommitment) TapscriptRoot(sibling *chainhash.Hash) chainhash.Hash {
 
 	// The ordering of `commitmentLeaf` and `sibling` doesn't matter here as
 	// TapBranch will sort them before hashing.
-	return tapBranchHash(commitmentLeaf.TapHash(), *sibling)
+	return TapBranchHash(commitmentLeaf.TapHash(), *sibling)
 }
 
 // Proof computes the full TaroCommitment merkle proof for the asset leaf

@@ -39,14 +39,20 @@ const (
 	defaultDataDirname        = "data"
 	defaultTLSCertFilename    = "tls.cert"
 	defaultTLSKeyFilename     = "tls.key"
-	defaultAdminMacFilename   = "admin.macaroon"
 	defaultLogLevel           = "info"
 	defaultLogDirname         = "logs"
 	defaultLogFilename        = "taro.log"
-	defaultRPCPort            = 10029
 	defaultRESTPort           = 8089
 	defaultLetsEncryptDirname = "letsencrypt"
 	defaultLetsEncryptListen  = ":80"
+
+	// DefaultAdminMacFilename is the default name of the Taro daemon's
+	// admin macaroon.
+	DefaultAdminMacFilename = "admin.macaroon"
+
+	// DefaultRPCPort is the default port that taro will listen on for
+	// incoming RPC connections.
+	DefaultRPCPort = 10029
 
 	defaultMaxLogFiles    = 3
 	defaultMaxLogFileSize = 10
@@ -109,10 +115,10 @@ var (
 
 	defaultNetwork = "testnet"
 
-	defaultDataDir = filepath.Join(DefaultTaroDir, defaultDataDirname)
+	DefaultDataDir = filepath.Join(DefaultTaroDir, defaultDataDirname)
 	defaultLogDir  = filepath.Join(DefaultTaroDir, defaultLogDirname)
 
-	defaultTLSCertPath = filepath.Join(DefaultTaroDir, defaultTLSCertFilename)
+	DefaultTLSCertPath = filepath.Join(DefaultTaroDir, defaultTLSCertFilename)
 	defaultTLSKeyPath  = filepath.Join(DefaultTaroDir, defaultTLSKeyFilename)
 
 	defaultLetsEncryptDir = filepath.Join(DefaultTaroDir, defaultLetsEncryptDirname)
@@ -137,7 +143,7 @@ var (
 	// defaultSqliteDatabasePath is the default path under which we store
 	// the SQLite database file.
 	defaultSqliteDatabasePath = filepath.Join(
-		defaultDataDir, defaultNetwork, defaultSqliteDatabaseFileName,
+		DefaultDataDir, defaultNetwork, defaultSqliteDatabaseFileName,
 	)
 
 	// minimalCompatibleVersion is the minimum version and build tags
@@ -270,14 +276,14 @@ func DefaultConfig() Config {
 	return Config{
 		TaroDir:        DefaultTaroDir,
 		ConfigFile:     DefaultConfigFile,
-		DataDir:        defaultDataDir,
+		DataDir:        DefaultDataDir,
 		DebugLevel:     defaultLogLevel,
 		LogDir:         defaultLogDir,
 		MaxLogFiles:    defaultMaxLogFiles,
 		MaxLogFileSize: defaultMaxLogFileSize,
 		net:            &tor.ClearNet{},
 		RpcConf: &RpcConfig{
-			TLSCertPath:       defaultTLSCertPath,
+			TLSCertPath:       DefaultTLSCertPath,
 			TLSKeyPath:        defaultTLSKeyPath,
 			TLSCertDuration:   defaultTLSCertDuration,
 			WSPingInterval:    lnrpc.DefaultPingInterval,
@@ -577,7 +583,7 @@ func ValidateConfig(cfg Config, interceptor signal.Interceptor) (*Config,
 	// the path for the macaroons to be generated.
 	if cfg.RpcConf.MacaroonPath == "" {
 		cfg.RpcConf.MacaroonPath = filepath.Join(
-			cfg.networkDir, defaultAdminMacFilename,
+			cfg.networkDir, DefaultAdminMacFilename,
 		)
 	}
 
@@ -675,7 +681,7 @@ func ValidateConfig(cfg Config, interceptor signal.Interceptor) (*Config,
 	// At least one RPCListener is required. So listen on localhost per
 	// default.
 	if len(cfg.RpcConf.RawRPCListeners) == 0 {
-		addr := fmt.Sprintf("localhost:%d", defaultRPCPort)
+		addr := fmt.Sprintf("localhost:%d", DefaultRPCPort)
 		cfg.RpcConf.RawRPCListeners = append(
 			cfg.RpcConf.RawRPCListeners, addr,
 		)
@@ -692,7 +698,7 @@ func ValidateConfig(cfg Config, interceptor signal.Interceptor) (*Config,
 	// Add default port to all RPC listener addresses if needed and remove
 	// duplicate addresses.
 	cfg.rpcListeners, err = lncfg.NormalizeAddresses(
-		cfg.RpcConf.RawRPCListeners, strconv.Itoa(defaultRPCPort),
+		cfg.RpcConf.RawRPCListeners, strconv.Itoa(DefaultRPCPort),
 		cfg.net.ResolveTCPAddr,
 	)
 	if err != nil {

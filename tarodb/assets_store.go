@@ -730,11 +730,10 @@ func constraintsToDbFilter(query *AssetQueryFilters) QueryAssetFilters {
 	return assetFilter
 }
 
-// specificAssetFilter maps the given asset parameters to the set of filters
-// we use in the SQL queries.
-func specificAssetFilter(id asset.ID, anchorPoint wire.OutPoint,
-	groupKey *asset.GroupKey,
-	scriptKey *asset.ScriptKey) (QueryAssetFilters, error) {
+// specificAnchorFilter maps the given anchor point to the set of filters we use
+// in the SQL queries.
+func specificAnchorFilter(anchorPoint wire.OutPoint) (QueryAssetFilters,
+	error) {
 
 	anchorPointBytes, err := encodeOutpoint(anchorPoint)
 	if err != nil {
@@ -742,11 +741,23 @@ func specificAssetFilter(id asset.ID, anchorPoint wire.OutPoint,
 			"outpoint: %w", err)
 	}
 
-	filter := QueryAssetFilters{
-		AssetIDFilter: id[:],
-		AnchorPoint:   anchorPointBytes,
+	return QueryAssetFilters{
+		AnchorPoint: anchorPointBytes,
+	}, nil
+}
+
+// specificAssetFilter maps the given asset parameters to the set of filters
+// we use in the SQL queries.
+func specificAssetFilter(id asset.ID, anchorPoint wire.OutPoint,
+	groupKey *asset.GroupKey,
+	scriptKey *asset.ScriptKey) (QueryAssetFilters, error) {
+
+	filter, err := specificAnchorFilter(anchorPoint)
+	if err != nil {
+		return filter, err
 	}
 
+	filter.AssetIDFilter = id[:]
 	if groupKey != nil {
 		key := groupKey.GroupPubKey
 		filter.KeyGroupFilter = key.SerializeCompressed()
@@ -1431,6 +1442,25 @@ func (a *AssetStore) FetchCommitment(ctx context.Context, id asset.ID,
 	return commitments[0], nil
 }
 
+// FetchCommitmentsByAnchor returns all commitments anchored to the given chain
+// OutPoint.
+func (a *AssetStore) FetchCommitmentsByAnchor(ctx context.Context,
+	anchorPoint wire.OutPoint) ([]*tarofreighter.AnchoredCommitment,
+	error) {
+
+	filter, err := specificAnchorFilter(anchorPoint)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create filter: %w", err)
+	}
+
+	commitments, err := a.queryCommitments(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("unable to query commitments: %w", err)
+	}
+
+	return commitments, nil
+}
+
 // ListEligibleCoins lists eligible commitments given a set of constraints.
 //
 // NOTE: This implements the tarofreighter.CoinLister interface.
@@ -1967,6 +1997,15 @@ func fetchAssetTransferOutputs(ctx context.Context, q ActiveAssetsStore,
 	return outputs, nil
 }
 
+func (a *AssetStore) StorePendingPassiveAssets(ctx context.Context,
+	passiveAssets []*tarofreighter.PassiveAssetReanchor) error {
+
+	var writeTxOpts AssetStoreTxOptions
+	return a.db.ExecTx(ctx, &writeTxOpts, func(q ActiveAssetsStore) error {
+		return a.logPendingPassiveAssets(ctx, q, passiveAssets)
+	})
+}
+
 // logPendingPassiveAssets logs passive assets re-anchoring data to disk.
 func logPendingPassiveAssets(ctx context.Context,
 	q ActiveAssetsStore, transferID, newUtxoID int32,
@@ -1982,16 +2021,17 @@ func logPendingPassiveAssets(ctx context.Context,
 			&newWitnessBuf, &passiveAsset.NewWitnessData, &buf,
 		)
 		if err != nil {
-			return fmt.Errorf("unable to encode witness: "+
-				"%w", err)
+			return fmt.Errorf("unable to encode witness: %w", err)
 		}
 
 		// Encode new proof.
 		var newProofBuf bytes.Buffer
-		err = passiveAsset.NewProof.Encode(&newProofBuf)
-		if err != nil {
-			return fmt.Errorf("unable to encode new passive "+
-				"asset proof: %w", err)
+		if passiveAsset.NewProof != nil {
+			err = passiveAsset.NewProof.Encode(&newProofBuf)
+			if err != nil {
+				return fmt.Errorf("unable to encode new "+
+					"passive asset proof: %w", err)
+			}
 		}
 
 		// Encode previous anchor outpoint.
@@ -1999,8 +2039,8 @@ func logPendingPassiveAssets(ctx context.Context,
 			passiveAsset.PrevAnchorPoint,
 		)
 		if err != nil {
-			return fmt.Errorf("unable to encode prev outpoint: "+
-				"%w", err)
+			return fmt.Errorf("unable to encode prev outpoint: %w",
+				err)
 		}
 
 		// Encode script key.

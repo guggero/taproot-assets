@@ -7,9 +7,13 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcutil/psbt"
+	"github.com/btcsuite/btcd/txscript"
+	"github.com/btcsuite/btcd/wire"
 	"github.com/lightninglabs/taro/asset"
 	"github.com/lightninglabs/taro/chanutils"
 	"github.com/lightninglabs/taro/proof"
+	"github.com/lightninglabs/taro/taroscript"
 	"github.com/lightninglabs/taro/universe"
 	"github.com/lightningnetwork/lnd/ticker"
 	"golang.org/x/exp/maps"
@@ -177,6 +181,8 @@ type ChainPlanter struct {
 
 	externalBatch chan *externalBatchReq
 
+	externalConf chan *externalBatchReq
+
 	// caretakers maps a batch key (which is used as the internal key for
 	// the transaction that mints the assets) to the caretaker that will
 	// progress the batch through the final phases.
@@ -204,6 +210,8 @@ func NewChainPlanter(cfg PlanterConfig) *ChainPlanter {
 		completionSignals: make(chan BatchKey),
 		seedlingReqs:      make(chan *Seedling),
 		stateReqs:         make(chan stateRequest),
+		externalBatch:     make(chan *externalBatchReq),
+		externalConf:      make(chan *externalBatchReq),
 		ContextGuard: &chanutils.ContextGuard{
 			DefaultTimeout: DefaultTimeout,
 			Quit:           make(chan struct{}),
@@ -461,6 +469,9 @@ func (c *ChainPlanter) gardener() {
 	for {
 		select {
 		case <-c.cfg.BatchTicker.Ticks():
+			log.Infof("Planter batch ticker ticked, checking for " +
+				"new batches")
+
 			// No pending batch, so we can just continue back to
 			// the top of the loop.
 			if c.pendingBatch == nil {
@@ -528,6 +539,27 @@ func (c *ChainPlanter) gardener() {
 			}
 
 			extBatchReq.done <- struct{}{}
+
+		case extConfReq := <-c.externalConf:
+			batchKey := asset.ToSerialized(
+				extConfReq.batch.BatchKey.PubKey,
+			)
+			caretaker, ok := c.caretakers[batchKey]
+			if !ok {
+				extConfReq.err <- fmt.Errorf("unknown "+
+					"caretaker for external conf: %x",
+					batchKey[:])
+				continue
+			}
+
+			err := caretaker.confirmExternalCultivation()
+			if err != nil {
+				extConfReq.err <- fmt.Errorf("unable to "+
+					"confirm external cultivation: %w", err)
+				continue
+			}
+
+			extConfReq.done <- struct{}{}
 
 		// A request for new asset issuance just arrived, add this to
 		// the pending batch and acknowledge the receipt back to the
@@ -711,17 +743,22 @@ func (c *ChainPlanter) CancelBatch() (*btcec.PublicKey, error) {
 	return <-req.resp, <-req.err
 }
 
-func (c *ChainPlanter) CultivateExternally(
-	_ *btcec.PublicKey) (*MintingBatch, error) {
+func (c *ChainPlanter) CultivateExternally(_ *btcec.PublicKey,
+	genesisOutPoint wire.OutPoint) (*MintingBatch, error) {
 
 	// TODO(guggero): Support more than one batch.
-	pendingBatch, err := c.PendingBatch()
+	batch, err := c.PendingBatch()
 	if err != nil {
 		return nil, err
 	}
+	batch.GenesisOutPoint = &genesisOutPoint
+
+	log.Debugf("Preparing batch %x for external cultivation, with genesis "+
+		"outpoint %v", batch.BatchKey.PubKey.SerializeCompressed(),
+		genesisOutPoint.String())
 
 	req := &externalBatchReq{
-		batch: pendingBatch,
+		batch: batch,
 		err:   make(chan error, 1),
 		done:  make(chan struct{}),
 	}
@@ -731,10 +768,77 @@ func (c *ChainPlanter) CultivateExternally(
 
 	select {
 	case <-req.done:
-		return pendingBatch, nil
+		return batch, nil
 
 	case err := <-req.err:
 		return nil, err
+	}
+}
+
+func (c *ChainPlanter) ConfirmExternalCultivation(_ *btcec.PublicKey,
+	fundedPkt *psbt.Packet, changeOutputIndex int32,
+	anchorOutputIndex uint32, internalKey *btcec.PublicKey,
+	tapscriptLeaves []txscript.TapLeaf) error {
+
+	// TODO(guggero): Support more than one batch.
+	batch, err := c.PendingBatch()
+	if err != nil {
+		return err
+	}
+
+	// Find the sibling to the Taro root commitment.
+	rootHash, siblingLeaf, err := taroscript.IdentifyTapScriptSibling(
+		tapscriptLeaves,
+	)
+	if err != nil {
+		return fmt.Errorf("error identifying tapscript sibling: %w",
+			err)
+	}
+	batch.taroScriptRoot = rootHash[:]
+
+	if siblingLeaf != nil {
+		log.Infof("Using sibling preimage %x for Taro root commitment",
+			siblingLeaf.Script)
+		batch.tapScriptSiblingPreimage = proof.NewPreimageFromLeaf(
+			*siblingLeaf,
+		)
+	}
+
+	// Populate how much this tx paid in on-chain fees.
+	chainFees, err := GetTxFee(fundedPkt)
+	if err != nil {
+		return fmt.Errorf("unable to get on-chain fees for psbt: %w",
+			err)
+	}
+
+	batch.GenesisPacket = &FundedPsbt{
+		Pkt:               fundedPkt,
+		ChangeOutputIndex: changeOutputIndex,
+		ChainFees:         chainFees,
+	}
+	batch.anchorOutputIndex = anchorOutputIndex
+	batch.mintingInternalKey = internalKey
+
+	log.Debugf("Confirming external cultivation for batch %x, with "+
+		"genesis outpoint %v",
+		batch.BatchKey.PubKey.SerializeCompressed(),
+		batch.GenesisOutPoint.String())
+
+	req := &externalBatchReq{
+		batch: batch,
+		err:   make(chan error, 1),
+		done:  make(chan struct{}),
+	}
+	if !chanutils.SendOrQuit(c.externalConf, req, c.Quit) {
+		return fmt.Errorf("chain planter shutting down")
+	}
+
+	select {
+	case <-req.done:
+		return nil
+
+	case err := <-req.err:
+		return err
 	}
 }
 
@@ -799,10 +903,11 @@ func (c *ChainPlanter) prepTaroSeedling(ctx context.Context,
 		// Create a new batch and commit it to disk so we can pick up
 		// where we left off upon restart.
 		newBatch := &MintingBatch{
-			CreationTime: time.Now(),
-			HeightHint:   currentHeight,
-			BatchState:   BatchStatePending,
-			BatchKey:     newInternalKey,
+			CreationTime:       time.Now(),
+			HeightHint:         currentHeight,
+			BatchState:         BatchStatePending,
+			BatchKey:           newInternalKey,
+			mintingInternalKey: newInternalKey.PubKey,
 			Seedlings: map[string]*Seedling{
 				req.AssetName: req,
 			},

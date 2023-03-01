@@ -92,10 +92,6 @@ type BatchCaretaker struct {
 	// confInfo is used to store a delivered confirmation event.
 	confInfo *chainntnfs.TxConfirmation
 
-	// anchorOutputIndex is the index in the anchor output that commits to
-	// the Taro commitment.
-	anchorOutputIndex uint32
-
 	// ContextGuard provides a wait group and main quit channel that can be
 	// used to create guarded contexts.
 	*chanutils.ContextGuard
@@ -193,7 +189,7 @@ func (b *BatchCaretaker) advanceStateUntil(currentState,
 		b.batchKey[:], currentState, targetState)
 
 	var terminalState bool
-	for !terminalState {
+	for !terminalState && currentState <= targetState {
 		// Before we attempt a state transition, make sure that we
 		// aren't trying to shut down or cancel the batch.
 		select {
@@ -264,7 +260,7 @@ func (b *BatchCaretaker) taroCultivator() {
 	}
 
 	// Our task as a cultivator is pretty simple: we advance our state
-	// machine up until the minting transaction is broadcaster or we fail
+	// machine up until the minting transaction is broadcast, or we fail
 	// for some reason. If we can broadcast, then we'll await a
 	// confirmation notification, which'll let us advance to the final
 	// state.
@@ -334,11 +330,47 @@ func (b *BatchCaretaker) prepForExternalCultivation() error {
 	// The external cultivator will then take over from there and create an
 	// anchor transaction.
 	_, err := b.advanceStateUntil(
-		b.cfg.Batch.BatchState, BatchStateCommitted,
+		b.cfg.Batch.BatchState, BatchStateGenesisOutPointDetermined,
 	)
 	if err != nil {
 		return fmt.Errorf("unable to advance state machine: %w", err)
 	}
+
+	return nil
+}
+
+func (b *BatchCaretaker) confirmExternalCultivation() error {
+	// If the batch is already marked as confirmed, then we're done.
+	if b.cfg.Batch.BatchState >= BatchStateConfirmed {
+		log.Infof("MintingBatch(%x): already confirmed!", b.batchKey[:])
+
+		return nil
+	}
+
+	ctx, cancel := b.WithCtxQuit()
+	defer cancel()
+	err := b.cfg.Log.AddSproutsToBatch(
+		ctx, b.cfg.Batch.BatchKey.PubKey, b.cfg.Batch.GenesisPacket,
+		b.cfg.Batch.RootAssetCommitment,
+	)
+	if err != nil {
+		return fmt.Errorf("unable to commit batch: %w", err)
+	}
+
+	batch := b.cfg.Batch
+	err = b.cfg.Log.CommitSignedGenesisTx(
+		ctx, batch.BatchKey.PubKey, batch.mintingInternalKey,
+		batch.GenesisPacket, batch.anchorOutputIndex,
+		batch.taroScriptRoot,
+	)
+	if err != nil {
+		return fmt.Errorf("unable to commit genesis tx: %w", err)
+	}
+
+	b.cfg.Batch.BatchState = BatchStateBroadcast
+
+	b.Wg.Add(1)
+	go b.taroCultivator()
 
 	return nil
 }
@@ -515,10 +547,17 @@ func (b *BatchCaretaker) stateStep(currentState BatchState) (BatchState, error) 
 
 		return BatchStateFrozen, nil
 
-	// In the frozen state, we know all the assets to create in this next
-	// batch, so we'll use the batch key as the internal key for the
-	// genesis transaction that'll create the batch.
 	case BatchStateFrozen:
+		// If we already have a genesis outpoint defined, we can skip
+		// this step.
+		if b.cfg.Batch.GenesisOutPoint != nil {
+			log.Infof("BatchCaretaker(%x): transition states: %v "+
+				"-> %v", b.batchKey, BatchStateFrozen,
+				BatchStateGenesisOutPointDetermined)
+
+			return BatchStateGenesisOutPointDetermined, nil
+		}
+
 		// First, we'll fund a PSBT packet with enough coins allocated
 		// as inputs to be able to create our genesis output for the
 		// asset and also pay for fees.
@@ -531,21 +570,36 @@ func (b *BatchCaretaker) stateStep(currentState BatchState) (BatchState, error) 
 		if err != nil {
 			return 0, err
 		}
+		b.cfg.Batch.GenesisPacket = genesisTxPkt
 
-		genesisPoint := extractGenesisOutpoint(
+		genesisOutPoint := extractGenesisOutpoint(
 			genesisTxPkt.Pkt.UnsignedTx,
 		)
+		b.cfg.Batch.GenesisOutPoint = &genesisOutPoint
 
 		// If the change output is first, then our commitment is second,
 		// and vice versa.
-		b.anchorOutputIndex = 0
+		b.cfg.Batch.anchorOutputIndex = 0
 		if genesisTxPkt.ChangeOutputIndex == 0 {
-			b.anchorOutputIndex = 1
+			b.cfg.Batch.anchorOutputIndex = 1
 		}
 
+		log.Infof("BatchCaretaker(%x): transition states: %v "+
+			"-> %v", b.batchKey, BatchStateFrozen,
+			BatchStateGenesisOutPointDetermined)
+
+		return BatchStateGenesisOutPointDetermined, nil
+
+	// In the frozen state, we know all the assets to create in this next
+	// batch, so we'll use the batch key as the internal key for the
+	// genesis transaction that'll create the batch.
+	case BatchStateGenesisOutPointDetermined:
 		// First, we'll turn all the seedlings into actual taro assets.
+		ctx, cancel := b.WithCtxQuit()
+		defer cancel()
 		taroCommitment, err := b.seedlingsToAssetSprouts(
-			ctx, genesisPoint, uint32(b.anchorOutputIndex),
+			ctx, *b.cfg.Batch.GenesisOutPoint,
+			b.cfg.Batch.anchorOutputIndex,
 		)
 		if err != nil {
 			return 0, fmt.Errorf("unable to map seedlings to "+
@@ -554,6 +608,14 @@ func (b *BatchCaretaker) stateStep(currentState BatchState) (BatchState, error) 
 
 		b.cfg.Batch.RootAssetCommitment = taroCommitment
 
+		log.Infof("BatchCaretaker(%x): transition states: %v "+
+			"-> %v", b.batchKey,
+			BatchStateGenesisOutPointDetermined,
+			BatchStateCommitted)
+
+		return BatchStateCommitted, nil
+
+	case BatchStateCommitted:
 		// With the commitment Taro root SMT constructed, we'll map
 		// that into the tapscript root we'll insert into the genesis
 		// transaction.
@@ -563,23 +625,33 @@ func (b *BatchCaretaker) stateStep(currentState BatchState) (BatchState, error) 
 				"script: %v", err)
 		}
 
-		genesisTxPkt.Pkt.UnsignedTx.TxOut[b.anchorOutputIndex].PkScript = genesisScript
+		anchorOutputIndex := b.cfg.Batch.anchorOutputIndex
+		unsignedTx := b.cfg.Batch.GenesisPacket.Pkt.UnsignedTx
+		unsignedTx.TxOut[anchorOutputIndex].PkScript = genesisScript
 
+		log.Infof("BatchCaretaker(%x): transition states: %v "+
+			"-> %v", b.batchKey, BatchStateCommitted,
+			BatchStateOutputCreated)
+
+		return BatchStateOutputCreated, nil
+
+	case BatchStateOutputCreated:
 		log.Infof("BatchCaretaker(%x): committing sprouts to disk",
 			b.batchKey[:])
 
 		// With all our commitments created, we'll commit them to disk,
 		// replacing the existing seedlings we had created for each of
 		// these assets.
-		err = b.cfg.Log.AddSproutsToBatch(
+		ctx, cancel := b.WithCtxQuit()
+		defer cancel()
+		err := b.cfg.Log.AddSproutsToBatch(
 			ctx, b.cfg.Batch.BatchKey.PubKey,
-			genesisTxPkt, b.cfg.Batch.RootAssetCommitment,
+			b.cfg.Batch.GenesisPacket,
+			b.cfg.Batch.RootAssetCommitment,
 		)
 		if err != nil {
 			return 0, fmt.Errorf("unable to commit batch: %w", err)
 		}
-
-		b.cfg.Batch.GenesisPacket = genesisTxPkt
 
 		// Now that we know the script key for all the assets, we'll
 		// populate the asset metas map as we need that to create the
@@ -598,15 +670,16 @@ func (b *BatchCaretaker) stateStep(currentState BatchState) (BatchState, error) 
 		}
 
 		log.Infof("BatchCaretaker(%x): transition states: %v -> %v",
-			b.batchKey, BatchStateFrozen, BatchStateCommitted)
+			b.batchKey, BatchStateCommitted,
+			BatchStateAnchorCreated)
 
-		return BatchStateCommitted, nil
+		return BatchStateAnchorCreated, nil
 
 	// In this state, all the assets have been committed to disk along with
 	// the genesis transaction which will create those assets on chain.
 	// We'll have the backing wallet sign the transaction, then import the
-	// resulting key into the wallet so it tracks the balance.
-	case BatchStateCommitted:
+	// resulting key into the wallet, so it tracks the balance.
+	case BatchStateAnchorCreated:
 		log.Infof("BatchCaretaker(%x): finalizing GenesisPacket",
 			b.batchKey[:])
 
@@ -647,8 +720,9 @@ func (b *BatchCaretaker) stateStep(currentState BatchState) (BatchState, error) 
 		}
 		err = b.cfg.Log.CommitSignedGenesisTx(
 			ctx, b.cfg.Batch.BatchKey.PubKey,
-			b.cfg.Batch.GenesisPacket, b.anchorOutputIndex,
-			taroRoot,
+			b.cfg.Batch.mintingInternalKey,
+			b.cfg.Batch.GenesisPacket,
+			b.cfg.Batch.anchorOutputIndex, taroRoot,
 		)
 		if err != nil {
 			return 0, fmt.Errorf("unable to commit genesis "+
@@ -679,14 +753,13 @@ func (b *BatchCaretaker) stateStep(currentState BatchState) (BatchState, error) 
 		}
 
 		log.Infof("BatchCaretaker(%x): transition states: %v -> %v",
-			b.batchKey, BatchStateCommitted, BatchStateBroadcast)
+			b.batchKey, BatchStateCommitted, BatchStateAnchorSigned)
 
-		return BatchStateBroadcast, nil
+		return BatchStateAnchorSigned, nil
 
-	// In this case the genesis transaction has already been rebroadcast.
-	// So we'll attempt to re-broadcast it, then wait for enough
-	// confirmations to pass.
-	case BatchStateBroadcast:
+	// In this case the genesis transaction as been signed. So we'll attempt
+	// to broadcast it, then wait for enough confirmations to pass.
+	case BatchStateAnchorSigned:
 		// First, we'll re-extract the final signed minting transaction
 		// which once broadcast and confirmed will mark the creation of
 		// our assets.
@@ -709,6 +782,12 @@ func (b *BatchCaretaker) stateStep(currentState BatchState) (BatchState, error) 
 				"transaction: %w", err)
 		}
 
+		log.Infof("BatchCaretaker(%x): transition states: %v -> %v",
+			b.batchKey, BatchStateAnchorSigned, BatchStateBroadcast)
+
+		return BatchStateBroadcast, nil
+
+	case BatchStateBroadcast:
 		// Now we'll wait for a confirmation as we reach our terminal
 		// state that requires an on-chain event to shift from. We make
 		// sure to request that the block is included as well, since we
@@ -717,10 +796,15 @@ func (b *BatchCaretaker) stateStep(currentState BatchState) (BatchState, error) 
 		//
 		// TODO(roasbeef): eventually want to be able to RBF the bump
 		heightHint := b.cfg.Batch.HeightHint
-		txHash := signedTx.TxHash()
+		batchTx := b.cfg.Batch.GenesisPacket.Pkt.UnsignedTx
+		txHash := batchTx.TxHash()
+
+		log.Infof("BatchCaretaker(%x): waiting for confirmation of "+
+			"GenesisTx %v", b.batchKey[:], txHash.String())
+
 		confCtx, confCancel := b.WithCtxQuitNoTimeout()
 		confNtfn, errChan, err := b.cfg.ChainBridge.RegisterConfirmationsNtfn(
-			confCtx, &txHash, signedTx.TxOut[0].PkScript, 1,
+			confCtx, &txHash, batchTx.TxOut[0].PkScript, 1,
 			heightHint, true,
 		)
 		if err != nil {
@@ -807,8 +891,8 @@ func (b *BatchCaretaker) stateStep(currentState BatchState) (BatchState, error) 
 				Block:       confInfo.Block,
 				Tx:          confInfo.Tx,
 				TxIndex:     int(confInfo.TxIndex),
-				OutputIndex: int(b.anchorOutputIndex),
-				InternalKey: b.cfg.Batch.BatchKey.PubKey,
+				OutputIndex: int(b.cfg.Batch.anchorOutputIndex),
+				InternalKey: b.cfg.Batch.mintingInternalKey,
 				TaroRoot:    b.cfg.Batch.RootAssetCommitment,
 			},
 			GenesisPoint: extractGenesisOutpoint(
@@ -818,7 +902,7 @@ func (b *BatchCaretaker) stateStep(currentState BatchState) (BatchState, error) 
 		err := proof.AddExclusionProofs(
 			&baseProof.BaseProofParams,
 			b.cfg.Batch.GenesisPacket.Pkt, func(idx uint32) bool {
-				return idx == b.anchorOutputIndex
+				return idx == b.cfg.Batch.anchorOutputIndex
 			},
 		)
 		if err != nil {
@@ -827,7 +911,8 @@ func (b *BatchCaretaker) stateStep(currentState BatchState) (BatchState, error) 
 		}
 
 		mintingProofs, err := proof.NewMintingBlobs(
-			baseProof, headerVerifier,
+			baseProof, b.cfg.Batch.tapScriptSiblingPreimage,
+			headerVerifier,
 			proof.WithAssetMetaReveals(b.cfg.Batch.AssetMetas),
 		)
 		if err != nil {

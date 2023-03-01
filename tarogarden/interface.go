@@ -8,6 +8,7 @@ import (
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/taro/asset"
@@ -38,7 +39,13 @@ type Planter interface {
 
 	PauseAutoBatch()
 
-	CultivateExternally(batchKey *btcec.PublicKey) (*MintingBatch, error)
+	CultivateExternally(batchKey *btcec.PublicKey,
+		genesisOutPoint wire.OutPoint) (*MintingBatch, error)
+
+	ConfirmExternalCultivation(batchKey *btcec.PublicKey,
+		fundedPkt *psbt.Packet, changeOutputIndex int32,
+		anchorOutputIndex uint32, internalKey *btcec.PublicKey,
+		tapscriptLeaves []txscript.TapLeaf) error
 
 	// CancelSeedling attempts to cancel the creation of a new asset
 	// identified by its name. If the seedling has already progressed to a
@@ -74,32 +81,44 @@ const (
 	// seedlings can be added to it.
 	BatchStateFrozen BatchState = 1
 
+	// BatchStateGenesisOutPointDetermined denotes that a batch now has
+	// determined the unique genesis outpoint for the minted asset geneses.
+	BatchStateGenesisOutPointDetermined BatchState = 2
+
 	// BatchStateCommitted denotes that a batch now has an unsigned genesis
 	// PSBT packet and the set of seedlings have been made into sprouts
 	// with all relevant fields populated.
-	BatchStateCommitted BatchState = 2
+	BatchStateCommitted BatchState = 3
+
+	BatchStateOutputCreated BatchState = 4
+
+	// BatchStateAnchorCreated denotes that a batch now has a fully
+	// assembled anchor genesis transaction that just needs to be signed.
+	BatchStateAnchorCreated BatchState = 5
+
+	BatchStateAnchorSigned BatchState = 6
 
 	// BatchStateBroadcast denotes a batch now has a fully signed genesis
 	// transaction and can be broadcast to the network.
-	BatchStateBroadcast BatchState = 3
+	BatchStateBroadcast BatchState = 7
 
 	// BatchStateConfirmed denotes that a batch has confirmed on chain, and
 	// only needs a sufficient amount of confirmations before it can be
 	// finalized.
-	BatchStateConfirmed BatchState = 4
+	BatchStateConfirmed BatchState = 8
 
 	// BatchStateFinalized is the final state for a batch. In this terminal
 	// state the batch has been confirmed on chain, with all assets
 	// created.
-	BatchStateFinalized BatchState = 5
+	BatchStateFinalized BatchState = 9
 
 	// BatchStateCancelled denotes that a batch has been cancelled, and
 	// will not be passed to a caretaker.
-	BatchStateSeedlingCancelled BatchState = 6
+	BatchStateSeedlingCancelled BatchState = 10
 
 	// BatchStateSproutedCancelled denotes that a batch has been cancelled
 	// after being passed to a caretaker and sprouting.
-	BatchStateSproutCancelled BatchState = 7
+	BatchStateSproutCancelled BatchState = 11
 )
 
 // String returns a human-readable string for the target batch state.
@@ -111,8 +130,17 @@ func (b BatchState) String() string {
 	case BatchStateFrozen:
 		return "BatchStateFrozen"
 
+	case BatchStateGenesisOutPointDetermined:
+		return "BatchStateGenesisOutPointDetermined"
+
 	case BatchStateCommitted:
 		return "BatchStateCommitted"
+
+	case BatchStateAnchorCreated:
+		return "BatchStateAnchorCreated"
+
+	case BatchStateAnchorSigned:
+		return "BatchStateAnchorSigned"
 
 	case BatchStateBroadcast:
 		return "BatchStateBroadcast"
@@ -177,14 +205,14 @@ type MintingStore interface {
 		genesisPacket *FundedPsbt, assets *commitment.TaroCommitment) error
 
 	// CommitSignedGenesisTx adds a fully signed genesis transaction to the
-	// batch, along with the taro script root, which is the left/right
-	// sibling for the Taro tapscript commitment in the transaction.
+	// batch, along with the tapscript root, which includes the Taro
+	// tapscript commitment in the transaction.
 	//
 	// NOTE: The BatchState should transition to the BatchStateBroadcast
 	// state upon a successful call.
-	CommitSignedGenesisTx(ctx context.Context, batchKey *btcec.PublicKey,
-		genesisTx *FundedPsbt, anchorOutputIndex uint32,
-		taroScriptRoot []byte) error
+	CommitSignedGenesisTx(ctx context.Context, batchKey,
+		internalKey *btcec.PublicKey, genesisTx *FundedPsbt,
+		anchorOutputIndex uint32, tapscriptRoot []byte) error
 
 	// MarkBatchConfirmed marks the batch as confirmed on chain. The passed
 	// block location information determines where exactly in the chain the
