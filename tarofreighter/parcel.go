@@ -254,15 +254,18 @@ type sendPackage struct {
 }
 
 // prepareForStorage prepares the send package for storing to the database.
-func (s *sendPackage) prepareForStorage(currentHeight uint32) (*OutboundParcel,
-	error) {
+func prepareForStorage(currentHeight uint32, anchorTx *AnchorTransaction,
+	vPkt *taropsbt.VPacket,
+	passiveAssets []*PassiveAssetReAnchor) (*OutboundParcel, error) {
 
 	// Gather newly generated data required for re-anchoring passive assets.
-	for idx := range s.PassiveAssets {
-		passiveAsset := s.PassiveAssets[idx]
+	for idx := range passiveAssets {
+		passiveAsset := passiveAssets[idx]
 
 		// Generate passive asset re-anchoring proofs.
-		newProof, err := s.createReAnchorProof(passiveAsset.VPacket)
+		newProof, err := createReAnchorProof(
+			anchorTx, vPkt, passiveAsset.VPacket,
+		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create re-anchor "+
 				"proof: %w", err)
@@ -273,17 +276,16 @@ func (s *sendPackage) prepareForStorage(currentHeight uint32) (*OutboundParcel,
 		passiveAsset.NewWitnessData = signedAsset.PrevWitnesses
 	}
 
-	vPkt := s.VirtualPacket
-	anchorTXID := s.AnchorTx.FinalTx.TxHash()
+	anchorTXID := anchorTx.FinalTx.TxHash()
 	parcel := &OutboundParcel{
-		AnchorTx:           s.AnchorTx.FinalTx,
+		AnchorTx:           anchorTx.FinalTx,
 		AnchorTxHeightHint: currentHeight,
 		// TODO(bhandras): use clock.Clock instead.
 		TransferTime:  time.Now(),
-		ChainFees:     s.AnchorTx.ChainFees,
+		ChainFees:     anchorTx.ChainFees,
 		Inputs:        make([]TransferInput, len(vPkt.Inputs)),
 		Outputs:       make([]TransferOutput, len(vPkt.Outputs)),
-		PassiveAssets: s.PassiveAssets,
+		PassiveAssets: passiveAssets,
 	}
 
 	for idx := range vPkt.Inputs {
@@ -292,15 +294,15 @@ func (s *sendPackage) prepareForStorage(currentHeight uint32) (*OutboundParcel,
 		// We don't know the actual outpoint the input is spending, so
 		// we need to look it up by the pkScript in the anchor TX.
 		var anchorOutPoint *wire.OutPoint
-		for inIdx := range s.AnchorTx.FundedPsbt.Pkt.Inputs {
-			pIn := s.AnchorTx.FundedPsbt.Pkt.Inputs[inIdx]
+		for inIdx := range anchorTx.FundedPsbt.Pkt.Inputs {
+			pIn := anchorTx.FundedPsbt.Pkt.Inputs[inIdx]
 			if pIn.WitnessUtxo == nil {
 				return nil, fmt.Errorf("anchor input %d has "+
 					"no witness utxo", idx)
 			}
 			utxo := pIn.WitnessUtxo
 			if bytes.Equal(utxo.PkScript, vIn.Anchor.PkScript) {
-				txIn := s.AnchorTx.FinalTx.TxIn[inIdx]
+				txIn := anchorTx.FinalTx.TxIn[inIdx]
 				anchorOutPoint = &txIn.PreviousOutPoint
 				break
 			}
@@ -322,7 +324,7 @@ func (s *sendPackage) prepareForStorage(currentHeight uint32) (*OutboundParcel,
 		}
 	}
 
-	outputCommitments := s.AnchorTx.OutputCommitments
+	outputCommitments := anchorTx.OutputCommitments
 	for idx := range vPkt.Outputs {
 		vOut := vPkt.Outputs[idx]
 
@@ -360,7 +362,7 @@ func (s *sendPackage) prepareForStorage(currentHeight uint32) (*OutboundParcel,
 		// If there are passive assets, they are always committed to the
 		// output that is marked as the split root.
 		if vOut.IsSplitRoot {
-			numPassiveAssets = uint32(len(s.PassiveAssets))
+			numPassiveAssets = uint32(len(passiveAssets))
 		}
 
 		// Either we have an asset that we commit to or we have an
@@ -376,7 +378,9 @@ func (s *sendPackage) prepareForStorage(currentHeight uint32) (*OutboundParcel,
 		// In any other case we expect an active asset transfer to be
 		// committed to.
 		case vOut.Asset != nil:
-			proofSuffix, err := s.createProofSuffix(idx)
+			proofSuffix, err := createProofSuffix(
+				anchorTx, vPkt, idx,
+			)
 			if err != nil {
 				return nil, fmt.Errorf("unable to create "+
 					"proof %d: %w", idx, err)
@@ -395,7 +399,7 @@ func (s *sendPackage) prepareForStorage(currentHeight uint32) (*OutboundParcel,
 				idx)
 		}
 
-		txOut := s.AnchorTx.FinalTx.TxOut[vOut.AnchorOutputIndex]
+		txOut := anchorTx.FinalTx.TxOut[vOut.AnchorOutputIndex]
 		parcel.Outputs[idx] = TransferOutput{
 			Anchor: Anchor{
 				OutPoint: wire.OutPoint{
@@ -424,19 +428,21 @@ func (s *sendPackage) prepareForStorage(currentHeight uint32) (*OutboundParcel,
 // final state transition that will be added to the proofs of the receiver. The
 // proof returned will have all the Taro level proof information, but contains
 // dummy data for the on-chain part.
-func (s *sendPackage) createProofSuffix(outIndex int) (*proof.Proof, error) {
-	inputPrevID := s.VirtualPacket.Inputs[0].PrevID
+func createProofSuffix(anchorTx *AnchorTransaction, vPkt *taropsbt.VPacket,
+	outIndex int) (*proof.Proof, error) {
 
-	params, err := proofParams(s.AnchorTx, s.VirtualPacket, outIndex)
+	inputPrevID := vPkt.Inputs[0].PrevID
+
+	params, err := proofParams(anchorTx, vPkt, outIndex)
 	if err != nil {
 		return nil, err
 	}
 
 	// We also need to account for any P2TR change outputs.
-	if len(s.AnchorTx.FundedPsbt.Pkt.UnsignedTx.TxOut) > 1 {
+	if len(anchorTx.FundedPsbt.Pkt.UnsignedTx.TxOut) > 1 {
 		isAnchor := func(idx uint32) bool {
-			for outIdx := range s.VirtualPacket.Outputs {
-				vOut := s.VirtualPacket.Outputs[outIdx]
+			for outIdx := range vPkt.Outputs {
+				vOut := vPkt.Outputs[outIdx]
 				if vOut.AnchorOutputIndex == idx {
 					return true
 				}
@@ -446,7 +452,7 @@ func (s *sendPackage) createProofSuffix(outIndex int) (*proof.Proof, error) {
 		}
 
 		err := proof.AddExclusionProofs(
-			&params.BaseProofParams, s.AnchorTx.FundedPsbt.Pkt,
+			&params.BaseProofParams, anchorTx.FundedPsbt.Pkt,
 			isAnchor,
 		)
 		if err != nil {
@@ -467,7 +473,7 @@ func (s *sendPackage) createProofSuffix(outIndex int) (*proof.Proof, error) {
 
 // newParams is used to create a set of new params for the final state
 // transition.
-func newParams(anchorTx *AnchorTransaction, a *asset.Asset, outputIndex int,
+func newParams(anchorTx *wire.MsgTx, a *asset.Asset, outputIndex int,
 	internalKey *btcec.PublicKey, taroRoot *commitment.TaroCommitment,
 	siblingPreimage *commitment.TapscriptPreimage) *proof.TransitionParams {
 
@@ -475,10 +481,10 @@ func newParams(anchorTx *AnchorTransaction, a *asset.Asset, outputIndex int,
 		BaseProofParams: proof.BaseProofParams{
 			Block: &wire.MsgBlock{
 				Transactions: []*wire.MsgTx{
-					anchorTx.FinalTx,
+					anchorTx,
 				},
 			},
-			Tx:               anchorTx.FinalTx,
+			Tx:               anchorTx,
 			TxIndex:          0,
 			OutputIndex:      outputIndex,
 			InternalKey:      internalKey,
@@ -512,7 +518,7 @@ func proofParams(anchorTx *AnchorTransaction, vPkt *taropsbt.VPacket,
 		rootTaroTree := outputCommitments[rootIndex]
 
 		rootParams := newParams(
-			anchorTx, rootOut.Asset, int(rootIndex),
+			anchorTx.FinalTx, rootOut.Asset, int(rootIndex),
 			rootOut.AnchorOutputInternalKey, rootTaroTree,
 			rootOut.AnchorOutputTapscriptPreimage,
 		)
@@ -557,7 +563,7 @@ func proofParams(anchorTx *AnchorTransaction, vPkt *taropsbt.VPacket,
 
 	splitRootPreimage := splitRootOut.AnchorOutputTapscriptPreimage
 	splitParams := newParams(
-		anchorTx, splitOut.Asset, int(splitIndex),
+		anchorTx.FinalTx, splitOut.Asset, int(splitIndex),
 		splitOut.AnchorOutputInternalKey, splitTaroTree,
 		splitOut.AnchorOutputTapscriptPreimage,
 	)
@@ -645,8 +651,9 @@ func addOtherOutputExclusionProofs(outputs []*taropsbt.VOutput,
 
 // createReAnchorProof creates the new proof for the re-anchoring of a passive
 // asset.
-func (s *sendPackage) createReAnchorProof(
-	passivePkt *taropsbt.VPacket) (*proof.Proof, error) {
+func createReAnchorProof(anchorTx *AnchorTransaction,
+	vPkt *taropsbt.VPacket, passivePkt *taropsbt.VPacket) (*proof.Proof,
+	error) {
 
 	// Passive asset transfers only have a single input and a single output.
 	passiveIn := passivePkt.Inputs[0]
@@ -656,20 +663,20 @@ func (s *sendPackage) createReAnchorProof(
 	// normally contains asset change. But it can also be that the split
 	// root output was just created for the passive assets, if there is no
 	// active transfer or no change.
-	changeOut, err := s.VirtualPacket.SplitRootOutput()
+	changeOut, err := vPkt.SplitRootOutput()
 	if err != nil {
 		return nil, fmt.Errorf("anchor output for passive assets not "+
 			"found: %w", err)
 	}
 
-	outputCommitments := s.AnchorTx.OutputCommitments
+	outputCommitments := anchorTx.OutputCommitments
 	passiveOutputIndex := passiveOut.AnchorOutputIndex
 	passiveTaroTree := outputCommitments[passiveOutputIndex]
 
 	// The base parameters include the inclusion proof of the passive asset
 	// in the split root output.
 	passiveParams := newParams(
-		s.AnchorTx, passiveOut.Asset, int(passiveOutputIndex),
+		anchorTx.FinalTx, passiveOut.Asset, int(passiveOutputIndex),
 		changeOut.AnchorOutputInternalKey, passiveTaroTree,
 		changeOut.AnchorOutputTapscriptPreimage,
 	)
@@ -678,7 +685,7 @@ func (s *sendPackage) createReAnchorProof(
 	// provide an exclusion proof of the passive asset for each of the other
 	// BTC level outputs.
 	err = addOtherOutputExclusionProofs(
-		s.VirtualPacket.Outputs, passiveOut.Asset, passiveParams,
+		vPkt.Outputs, passiveOut.Asset, passiveParams,
 		outputCommitments, func(i int, vOut *taropsbt.VOutput) bool {
 			return vOut.AnchorOutputIndex == passiveOutputIndex
 		},
@@ -689,10 +696,10 @@ func (s *sendPackage) createReAnchorProof(
 
 	// Add exclusion proof(s) for any P2TR (=BIP-0086, not carrying any
 	// assets) change outputs.
-	if len(s.AnchorTx.FundedPsbt.Pkt.UnsignedTx.TxOut) > 1 {
+	if len(anchorTx.FundedPsbt.Pkt.UnsignedTx.TxOut) > 1 {
 		isAnchor := func(idx uint32) bool {
-			for outIdx := range s.VirtualPacket.Outputs {
-				vOut := s.VirtualPacket.Outputs[outIdx]
+			for outIdx := range vPkt.Outputs {
+				vOut := vPkt.Outputs[outIdx]
 				if vOut.AnchorOutputIndex == idx {
 					return true
 				}
@@ -703,7 +710,7 @@ func (s *sendPackage) createReAnchorProof(
 
 		err := proof.AddExclusionProofs(
 			&passiveParams.BaseProofParams,
-			s.AnchorTx.FundedPsbt.Pkt, isAnchor,
+			anchorTx.FundedPsbt.Pkt, isAnchor,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("error adding exclusion "+
