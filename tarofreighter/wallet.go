@@ -942,15 +942,6 @@ func (f *AssetWallet) AnchorVirtualTransactions(ctx context.Context,
 			"supported for now")
 	}
 	vPacket := params.VPkts[0]
-	inputCommitment := params.InputCommitments[0]
-
-	outputCommitments, err := taroscript.CreateOutputCommitments(
-		inputCommitment, vPacket, params.PassiveAssetsVPkts,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("unable to create new output "+
-			"commitments: %w", err)
-	}
 
 	// Construct our template PSBT to commits to the set of dummy locators
 	// we use to make fee estimation work.
@@ -985,6 +976,15 @@ func (f *AssetWallet) AnchorVirtualTransactions(ctx context.Context,
 	signAnchorPkt, err := copyPsbt(anchorPkt.Pkt)
 	if err != nil {
 		return nil, fmt.Errorf("unable to copy PSBT: %w", err)
+	}
+
+	inputCommitment := params.InputCommitments[0]
+	outputCommitments, err := taroscript.CreateOutputCommitments(
+		inputCommitment, vPacket, params.PassiveAssetsVPkts,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create new output "+
+			"commitments: %w", err)
 	}
 
 	// First, we'll update the PSBT packets to insert the _real_ outputs we
