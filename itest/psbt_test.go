@@ -8,7 +8,10 @@ import (
 
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil/psbt"
+	"github.com/btcsuite/btcd/txscript"
+	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcwallet/waddrmgr"
+	"github.com/lightninglabs/lndclient"
 	tap "github.com/lightninglabs/taproot-assets"
 	"github.com/lightninglabs/taproot-assets/address"
 	"github.com/lightninglabs/taproot-assets/asset"
@@ -20,6 +23,8 @@ import (
 	"github.com/lightninglabs/taproot-assets/taprpc/mintrpc"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/keychain"
+	"github.com/lightningnetwork/lnd/lnrpc/signrpc"
+	"github.com/lightningnetwork/lnd/lntest/rpc"
 	"github.com/stretchr/testify/require"
 )
 
@@ -950,6 +955,199 @@ func testPsbtMultiSend(t *harnessTest) {
 		ctxt, t, t.tapd, secondTapd, outputAmounts[2], 0,
 		genInfo, rpcAssets[0], 2, 3, 2,
 	)
+}
+
+// testPsbtMultiSigSend tests that we can properly send assets with a multi-sig
+// back and forth between nodes with the use of PSBTs.
+func testPsbtMultiSigSend(t *harnessTest) {
+	// First, we'll make a normal asset with enough units to allow us to
+	// send it around a few times.
+	rpcAssets := mintAssetsConfirmBatch(
+		t, t.tapd, []*mintrpc.MintAssetRequest{simpleAssets[0]},
+	)
+
+	mintedAsset := rpcAssets[0]
+	genesisInfo := rpcAssets[0].AssetGenesis
+
+	ctxb := context.Background()
+	ctxt, cancel := context.WithTimeout(ctxb, defaultWaitTimeout)
+	defer cancel()
+
+	// Now that we have the asset created, we'll make a new node that'll
+	// serve as the node which'll receive the assets. We make sure the two
+	// nodes are synced so both of them are aware of the minted asset.
+	secondTapd := setupTapdHarness(
+		t.t, t, t.lndHarness.Bob, t.universeServer,
+		func(params *tapdHarnessParams) {
+			params.startupSyncNode = t.tapd
+			params.startupSyncNumAssets = len(rpcAssets)
+		},
+	)
+	defer func() {
+		require.NoError(t.t, secondTapd.stop(true))
+	}()
+
+	var (
+		alice    = t.tapd
+		bob      = secondTapd
+		numUnits = uint64(10)
+	)
+
+	// We are going to send the asset to Bob, but we'll use a multi-sig
+	// script to make sure Bob can only spend the assets if Alice co-signs
+	// the asset transfer. So Alice needs to derive a key for the multi-sig
+	// script.
+	aliceMultiSigKey, _ := deriveKeys(t.t, alice)
+
+	// We need to derive two keys, one for the new script key and one for
+	// the internal key.
+	bobMultiSigKey, bobInternalKey := deriveKeys(t.t, bob)
+
+	// Now we create a script leaf with the 2-of-2 multi-sig script.
+	builder := txscript.NewScriptBuilder()
+	builder.AddData(schnorr.SerializePubKey(aliceMultiSigKey.RawKey.PubKey))
+	builder.AddOp(txscript.OP_CHECKSIG)
+	builder.AddData(schnorr.SerializePubKey(bobMultiSigKey.RawKey.PubKey))
+	builder.AddOp(txscript.OP_CHECKSIGADD)
+	builder.AddOp(txscript.OP_2)
+	builder.AddOp(txscript.OP_NUMEQUAL)
+	multiSigScript, err := builder.Script()
+	require.NoError(t.t, err)
+
+	multiSigLeaf := txscript.NewBaseTapLeaf(multiSigScript)
+
+	// Make sure nobody can use the key spend path by using the NUMS key as
+	// the internal key.
+	tapscript := input.TapscriptFullTree(asset.NUMSPubKey, multiSigLeaf)
+	rootHash := multiSigLeaf.TapHash()
+
+	sendToTapscriptAddr(
+		ctxt, t, alice, bob, numUnits, genesisInfo, mintedAsset,
+		bobMultiSigKey, bobInternalKey, tapscript, rootHash[:],
+	)
+
+	// Now try to send back those assets using the PSBT flow.
+	aliceAddr, err := alice.NewAddr(ctxb, &taprpc.NewAddrRequest{
+		AssetId: genesisInfo.AssetId,
+		Amt:     numUnits / 2,
+	})
+	require.NoError(t.t, err)
+	assertAddrCreated(t.t, alice, rpcAssets[0], aliceAddr)
+
+	fundResp := fundAddressSendPacket(t, bob, aliceAddr)
+	fundedPacket, err := tappsbt.NewFromRawBytes(
+		bytes.NewReader(fundResp.FundedPsbt), false,
+	)
+	require.NoError(t.t, err)
+
+	// We can now ask the wallet to sign the script path, since we only need
+	// a signature.
+	controlBlockBytes, err := tapscript.ControlBlock.ToBytes()
+	require.NoError(t.t, err)
+	fundedPacket.Inputs[0].TaprootMerkleRoot = rootHash[:]
+	fundedPacket.Inputs[0].TaprootLeafScript = []*psbt.TaprootTapLeafScript{
+		{
+			ControlBlock: controlBlockBytes,
+			Script:       multiSigLeaf.Script,
+			LeafVersion:  multiSigLeaf.LeafVersion,
+		},
+	}
+	fundedPacket.Inputs[0].TaprootBip32Derivation[0].LeafHashes = [][]byte{
+		rootHash[:],
+	}
+
+	// Now we'll attempt to complete the transfer.
+	sendResp, err := bob.AnchorVirtualPsbts(
+		ctxb, &wrpc.AnchorVirtualPsbtsRequest{
+			VirtualPsbts: [][]byte{signedResp.SignedPsbt},
+		},
+	)
+	require.NoError(t.t, err)
+
+	confirmAndAssertOutboundTransfer(
+		t, bob, sendResp, genesisInfo.AssetId,
+		[]uint64{numUnits / 2, numUnits / 2}, 0, 1,
+	)
+	_ = sendProof(t, bob, alice, aliceAddr.ScriptKey, genesisInfo)
+	assertNonInteractiveRecvComplete(t, alice, 1)
+
+	aliceAssets, err := alice.ListAssets(ctxb, &taprpc.ListAssetRequest{
+		WithWitness: true,
+	})
+	require.NoError(t.t, err)
+
+	assetsJSON, err := formatProtoJSON(aliceAssets)
+	require.NoError(t.t, err)
+	t.Logf("Got alice assets: %s", assetsJSON)
+}
+
+type testLndSigner struct {
+	lnd *rpc.HarnessRPC
+}
+
+func (t *testLndSigner) SignVirtualTx(signDesc *lndclient.SignDescriptor,
+	tx *wire.MsgTx, prevOut *wire.TxOut) (*schnorr.Signature, error) {
+
+	var buf bytes.Buffer
+	err := tx.Serialize(&buf)
+	if err != nil {
+		return nil, err
+	}
+
+	keyDesc := &signrpc.KeyDescriptor{
+		RawKeyBytes: signDesc.KeyDesc.PubKey.SerializeCompressed(),
+		KeyLoc: &signrpc.KeyLocator{
+			KeyFamily: int32(signDesc.KeyDesc.Family),
+			KeyIndex:  int32(signDesc.KeyDesc.Index),
+		},
+	}
+	signReq := &signrpc.SignReq{
+		RawTxBytes: buf.Bytes(),
+		SignDescs: []*signrpc.SignDescriptor{{
+			KeyDesc:       keyDesc,
+			SingleTweak:   signDesc.SingleTweak,
+			TapTweak:      signDesc.TapTweak,
+			WitnessScript: signDesc.WitnessScript,
+			Output: &signrpc.TxOut{
+				Value:    signDesc.Output.Value,
+				PkScript: signDesc.Output.PkScript,
+			},
+			Sighash:    uint32(signDesc.HashType),
+			InputIndex: int32(signDesc.InputIndex),
+			SignMethod: lndclient.MarshalSignMethod(
+				signDesc.SignMethod,
+			),
+		}},
+		PrevOutputs: []*signrpc.TxOut{{
+			Value:    prevOut.Value,
+			PkScript: prevOut.PkScript,
+		}},
+	}
+
+	signResp, err := t.lnd.Signer.SignOutputRaw(
+		context.Background(), signReq,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// Our signer should only ever produce one signature or fail before this
+	// point, so accessing the signature directly is safe.
+	virtualTxSig, err := schnorr.ParseSignature(signResp.RawSigs[0])
+	if err != nil {
+		return nil, err
+	}
+
+	return virtualTxSig, nil
+}
+
+// Execute is part of the tapscript.TxValidator interface and validates a
+// virtual transaction. We skip this in the integration tests as we might want
+// to have multiple signers and the validation would fail on the first one.
+func (t *testLndSigner) Execute(*asset.Asset, []*commitment.SplitAsset,
+	commitment.InputSet) error {
+
+	return nil
 }
 
 func deriveKeys(t *testing.T, tapd *tapdHarness) (asset.ScriptKey,
