@@ -659,6 +659,8 @@ func (b *BatchCaretaker) stateStep(currentState BatchState) (BatchState, error) 
 		// asset proofs. On restart, we'll get these in the batch
 		// pre-populated.
 		for _, newAsset := range tapCommitment.CommittedAssets() {
+			newAsset := newAsset
+
 			seedling, ok := b.cfg.Batch.Seedlings[newAsset.Tag]
 			if !ok {
 				continue
@@ -1061,7 +1063,6 @@ func (b *BatchCaretaker) storeMintingProof(ctx context.Context,
 	groupVerifier proof.GroupVerifier) (proof.Blob, *universe.IssuanceItem,
 	error) {
 
-	assetID := a.ID()
 	blob, err := proof.EncodeAsProofFile(mintingProof)
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to encode proof file: %w",
@@ -1070,7 +1071,7 @@ func (b *BatchCaretaker) storeMintingProof(ctx context.Context,
 
 	fullProof := &proof.AnnotatedProof{
 		Locator: proof.Locator{
-			AssetID:   &assetID,
+			AssetID:   &a.ID,
 			ScriptKey: *a.ScriptKey.PubKey,
 		},
 		Blob: blob,

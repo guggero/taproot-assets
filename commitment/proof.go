@@ -129,7 +129,7 @@ func (p Proof) DeriveByAssetInclusion(asset *asset.Asset) (*TapCommitment,
 	)
 	log.Tracef("Derived asset inclusion proof for asset_id=%v, "+
 		"asset_commitment_key=%x, asset_commitment_leaf=%s",
-		asset.ID(), fn.ByteSlice(asset.AssetCommitmentKey()),
+		asset.ID, fn.ByteSlice(asset.AssetCommitmentKey()),
 		assetCommitmentLeaf.NodeHash())
 
 	return NewTapCommitmentWithRoot(

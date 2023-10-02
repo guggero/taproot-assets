@@ -157,14 +157,13 @@ func (w *ReOrgWatcher) Start() error {
 
 		for idx := range assets {
 			locator := proof.Locator{
-				AssetID:   fn.Ptr(assets[idx].ID()),
+				AssetID:   fn.Ptr(assets[idx].ID),
 				ScriptKey: *assets[idx].ScriptKey.PubKey,
 			}
 			blob, err := w.cfg.ProofArchive.FetchProof(ctx, locator)
 			if err != nil {
 				startErr = fmt.Errorf("unable to fetch proof "+
-					"for asset %v: %w", assets[idx].ID(),
-					err)
+					"for asset %v: %w", assets[idx].ID, err)
 				return
 			}
 
@@ -179,8 +178,7 @@ func (w *ReOrgWatcher) Start() error {
 			err = w.MaybeWatch(f, w.DefaultUpdateCallback())
 			if err != nil {
 				startErr = fmt.Errorf("unable to watch proof "+
-					"for asset %v: %w", assets[idx].ID(),
-					err)
+					"for asset %v: %w", assets[idx].ID, err)
 				return
 			}
 		}

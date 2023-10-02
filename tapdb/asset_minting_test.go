@@ -758,7 +758,9 @@ func TestCommitBatchChainActions(t *testing.T) {
 	require.Equal(t, numSeedlings+1, len(assetBalances))
 
 	for _, newAsset := range mintedAssets {
-		assetBalance, ok := assetBalances[newAsset.ID()]
+		newAsset := newAsset
+
+		assetBalance, ok := assetBalances[newAsset.ID]
 		require.True(t, ok)
 
 		require.Equal(t, newAsset.Amount, assetBalance.Balance)

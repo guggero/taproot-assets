@@ -262,7 +262,7 @@ func NewSplitCommitment(ctx context.Context, inputs []SplitCommitmentInput,
 		inAsset := input.Asset
 		prevID := &asset.PrevID{
 			OutPoint:  input.OutPoint,
-			ID:        inAsset.Genesis.ID(),
+			ID:        inAsset.ID,
 			ScriptKey: asset.ToSerialized(inAsset.ScriptKey.PubKey),
 		}
 		inputSet[*prevID] = inAsset

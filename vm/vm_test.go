@@ -137,7 +137,7 @@ func collectibleStateTransition(t *testing.T) (*asset.Asset,
 
 	prevID := &asset.PrevID{
 		OutPoint:  genesisOutPoint,
-		ID:        genesisAsset.Genesis.ID(),
+		ID:        genesisAsset.ID,
 		ScriptKey: asset.ToSerialized(genesisAsset.ScriptKey.PubKey),
 	}
 	newAsset := genesisAsset.Copy()
@@ -189,12 +189,12 @@ func normalStateTransition(t *testing.T) (*asset.Asset, commitment.SplitSet,
 
 	prevID1 := &asset.PrevID{
 		OutPoint:  genesisOutPoint,
-		ID:        genesisAsset1.Genesis.ID(),
+		ID:        genesisAsset1.ID,
 		ScriptKey: asset.ToSerialized(genesisAsset1.ScriptKey.PubKey),
 	}
 	prevID2 := &asset.PrevID{
 		OutPoint:  genesisOutPoint,
-		ID:        genesisAsset2.Genesis.ID(),
+		ID:        genesisAsset2.ID,
 		ScriptKey: asset.ToSerialized(genesisAsset2.ScriptKey.PubKey),
 	}
 
@@ -245,7 +245,7 @@ func splitStateTransition(t *testing.T) (*asset.Asset, commitment.SplitSet,
 	genesisAsset := randAsset(t, asset.Normal, scriptKey)
 	genesisAsset.Amount = 3
 
-	assetID := genesisAsset.Genesis.ID()
+	assetID := genesisAsset.ID
 	rootLocator := &commitment.SplitLocator{
 		OutputIndex: 0,
 		AssetID:     assetID,
@@ -300,7 +300,7 @@ func splitFullValueStateTransition(validRootLocator,
 		genesisAsset := randAsset(t, asset.Normal, scriptKey)
 		genesisAsset.Amount = 3
 
-		assetID := genesisAsset.Genesis.ID()
+		assetID := genesisAsset.ID
 		rootLocator := &commitment.SplitLocator{
 			OutputIndex: 0,
 			AssetID:     assetID,
@@ -358,7 +358,7 @@ func splitCollectibleStateTransition(validRoot bool) stateTransitionFunc {
 		genesisOutPoint := wire.OutPoint{}
 		genesisAsset := randAsset(t, asset.Collectible, scriptKey)
 
-		assetID := genesisAsset.Genesis.ID()
+		assetID := genesisAsset.ID
 		rootLocator := &commitment.SplitLocator{
 			OutputIndex: 0,
 			AssetID:     assetID,
@@ -452,7 +452,7 @@ func scriptTreeSpendStateTransition(t *testing.T, useHashLock,
 	genesisAsset := randAsset(t, asset.Normal, scriptKey)
 	genesisAsset.Amount = 3
 
-	assetID := genesisAsset.Genesis.ID()
+	assetID := genesisAsset.ID
 	rootLocator := &commitment.SplitLocator{
 		OutputIndex: 0,
 		AssetID:     assetID,

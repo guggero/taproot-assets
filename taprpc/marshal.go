@@ -20,7 +20,6 @@ func MarshalAsset(ctx context.Context, a *asset.Asset,
 	isSpent, withWitness bool,
 	keyRing KeyLookup) (*Asset, error) {
 
-	assetID := a.Genesis.ID()
 	scriptKeyIsLocal := false
 	if a.ScriptKey.TweakedScriptKey != nil && keyRing != nil {
 		scriptKeyIsLocal = keyRing.IsLocalKey(
@@ -34,7 +33,7 @@ func MarshalAsset(ctx context.Context, a *asset.Asset,
 			GenesisPoint: a.Genesis.FirstPrevOut.String(),
 			Name:         a.Genesis.Tag,
 			MetaHash:     a.Genesis.MetaHash[:],
-			AssetId:      assetID[:],
+			AssetId:      a.ID[:],
 			OutputIndex:  a.Genesis.OutputIndex,
 		},
 		AssetType:        AssetType(a.Type),

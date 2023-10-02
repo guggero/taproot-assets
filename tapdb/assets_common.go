@@ -167,6 +167,8 @@ func upsertAssetsWithGenesis(ctx context.Context, q UpsertAssetStore,
 	// itself.
 	assetIDs := make([]int32, len(assets))
 	for idx, a := range assets {
+		a := a
+
 		// First, we make sure the genesis asset information exists in
 		// the database.
 		genAssetID, err := upsertGenesis(

@@ -1289,7 +1289,6 @@ func (r *rpcServer) marshalProof(ctx context.Context, p *proof.Proof,
 		}
 	}
 
-	decodedAssetID := p.Asset.ID()
 	var genesisReveal *taprpc.GenesisReveal
 	if rpcGenesis != nil {
 		genesisReveal = &taprpc.GenesisReveal{
@@ -1297,7 +1296,7 @@ func (r *rpcServer) marshalProof(ctx context.Context, p *proof.Proof,
 				GenesisPoint: rpcGenesis.FirstPrevOut.String(),
 				Name:         rpcGenesis.Tag,
 				MetaHash:     rpcGenesis.MetaHash[:],
-				AssetId:      decodedAssetID[:],
+				AssetId:      p.Asset.ID[:],
 				OutputIndex:  rpcGenesis.OutputIndex,
 			},
 			AssetType: taprpc.AssetType(p.Asset.Type),
@@ -1617,7 +1616,7 @@ func (r *rpcServer) AnchorVirtualPsbts(ctx context.Context,
 	inputAsset := vPacket.Inputs[0].Asset()
 	prevID := vPacket.Inputs[0].PrevID
 	inputCommitment, err := r.cfg.AssetStore.FetchCommitment(
-		ctx, inputAsset.ID(), prevID.OutPoint, inputAsset.GroupKey,
+		ctx, inputAsset.ID, prevID.OutPoint, inputAsset.GroupKey,
 		&inputAsset.ScriptKey, true,
 	)
 	if err != nil {
@@ -3277,7 +3276,7 @@ func (r *rpcServer) ProveAssetOwnership(ctx context.Context,
 
 	inputAsset := lastSnapshot.Asset
 	inputCommitment, err := r.cfg.AssetStore.FetchCommitment(
-		ctx, inputAsset.ID(), lastSnapshot.OutPoint,
+		ctx, inputAsset.ID, lastSnapshot.OutPoint,
 		inputAsset.GroupKey, &inputAsset.ScriptKey, false,
 	)
 	if err != nil {

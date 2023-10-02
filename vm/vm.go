@@ -47,7 +47,7 @@ func matchesPrevGenesis(prevID asset.ID, groupKey *asset.GroupKey,
 
 	switch {
 	// Matched genesis ID, gg.
-	case prevID == prevAsset.Genesis.ID():
+	case prevID == prevAsset.ID:
 		return true
 
 	// Mismatched ID and nil GroupKey, ouch.
@@ -159,7 +159,7 @@ func (vm *Engine) validateSplit(splitAsset *commitment.SplitAsset) error {
 	// resolves to the split commitment root found within the change asset.
 	locator := &commitment.SplitLocator{
 		OutputIndex: splitAsset.OutputIndex,
-		AssetID:     splitAsset.Genesis.ID(),
+		AssetID:     splitAsset.ID,
 		ScriptKey:   asset.ToSerialized(splitAsset.ScriptKey.PubKey),
 		Amount:      splitAsset.Amount,
 	}

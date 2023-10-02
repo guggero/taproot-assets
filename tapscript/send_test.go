@@ -214,17 +214,17 @@ func updateScenarioAssets(t *testing.T, state *spendData) {
 	// Asset PrevIDs, required to represent an input asset for a spend.
 	state.asset1PrevID = asset.PrevID{
 		OutPoint:  wire.OutPoint{},
-		ID:        state.asset1.ID(),
+		ID:        state.asset1.ID,
 		ScriptKey: asset.ToSerialized(&state.spenderScriptKey),
 	}
 	state.asset1CollectGroupPrevID = asset.PrevID{
 		OutPoint:  wire.OutPoint{},
-		ID:        state.asset1CollectGroup.ID(),
+		ID:        state.asset1CollectGroup.ID,
 		ScriptKey: asset.ToSerialized(&state.spenderScriptKey),
 	}
 	state.asset2PrevID = asset.PrevID{
 		OutPoint:  wire.OutPoint{},
-		ID:        state.asset2.ID(),
+		ID:        state.asset2.ID,
 		ScriptKey: asset.ToSerialized(&state.spenderScriptKey),
 	}
 
@@ -1740,7 +1740,7 @@ func TestProofVerify(t *testing.T) {
 	}
 	state.asset2PrevID = asset.PrevID{
 		OutPoint:  *genesisOutPoint,
-		ID:        state.asset2.ID(),
+		ID:        state.asset2.ID,
 		ScriptKey: asset.ToSerialized(&state.spenderScriptKey),
 	}
 	state.asset2InputAssets = commitment.InputSet{
@@ -1811,7 +1811,7 @@ func TestProofVerifyFullValueSplit(t *testing.T) {
 	}
 	state.asset2PrevID = asset.PrevID{
 		OutPoint:  *genesisOutPoint,
-		ID:        state.asset2.ID(),
+		ID:        state.asset2.ID,
 		ScriptKey: asset.ToSerialized(&state.spenderScriptKey),
 	}
 	state.asset2InputAssets = commitment.InputSet{
@@ -2196,7 +2196,7 @@ func TestPayToAddrScript(t *testing.T) {
 func sendCommitment(t *testing.T, a *asset.Asset, sendAmt btcutil.Amount,
 	recipientScriptKey asset.ScriptKey) *commitment.AssetCommitment {
 
-	key := asset.AssetCommitmentKey(a.ID(), recipientScriptKey.PubKey, true)
+	key := asset.AssetCommitmentKey(a.ID, recipientScriptKey.PubKey, true)
 	tree := mssmt.NewCompactedTree(mssmt.NewDefaultStore())
 
 	sendAsset := a.Copy()
@@ -2219,7 +2219,7 @@ func sendCommitment(t *testing.T, a *asset.Asset, sendAmt btcutil.Amount,
 
 	return &commitment.AssetCommitment{
 		Version:  a.Version,
-		AssetID:  a.ID(),
+		AssetID:  a.ID,
 		TreeRoot: root,
 	}
 }

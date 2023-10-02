@@ -136,13 +136,12 @@ func virtualTxOut(txAsset *asset.Asset) (*wire.TxOut, error) {
 		var emptyKey [32]byte
 		groupKey = emptyKey[:]
 	}
-	assetID := txAsset.Genesis.ID()
 
 	// TODO(roasbeef): double check this key matches the split commitment
 	// above? or can treat as standalone case (no splits)
 	h := sha256.New()
 	_, _ = h.Write(groupKey)
-	_, _ = h.Write(assetID[:])
+	_, _ = h.Write(txAsset.ID[:])
 	_, _ = h.Write(schnorr.SerializePubKey(txAsset.ScriptKey.PubKey))
 
 	// The new asset may have witnesses for its input(s), so make a

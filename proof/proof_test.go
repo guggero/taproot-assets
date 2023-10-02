@@ -710,8 +710,7 @@ func TestProofVerification(t *testing.T) {
 	err = p.Decode(bytes.NewReader(proofBytes))
 	require.NoError(t, err)
 
-	assetID := p.Asset.ID()
-	t.Logf("Proof asset ID: %x", assetID[:])
+	t.Logf("Proof asset ID: %x", p.Asset.ID[:])
 
 	inclusionTxOut := p.AnchorTx.TxOut[p.InclusionProof.OutputIndex]
 	t.Logf("Proof inclusion tx out: %x", inclusionTxOut.PkScript)

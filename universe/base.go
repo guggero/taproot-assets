@@ -250,9 +250,9 @@ func (a *MintingArchive) verifyIssuanceProof(ctx context.Context, id Identifier,
 			newAsset.GroupKey.GroupPubKey.SerializeCompressed())
 
 	// If the group key is nil, then the asset ID should match.
-	case id.GroupKey == nil && id.AssetID != newAsset.ID():
+	case id.GroupKey == nil && id.AssetID != newAsset.ID:
 		return nil, fmt.Errorf("asset id mismatch: expected %v, got %v",
-			id.AssetID, newAsset.ID())
+			id.AssetID, newAsset.ID)
 
 	// The script key should also match exactly.
 	case !newAsset.ScriptKey.PubKey.IsEqual(key.ScriptKey.PubKey):

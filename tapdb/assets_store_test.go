@@ -261,7 +261,6 @@ func TestImportAssetProof(t *testing.T) {
 		Value:    10,
 	})
 
-	assetID := testAsset.ID()
 	anchorPoint := wire.OutPoint{
 		Hash:  anchorTx.TxHash(),
 		Index: 0,
@@ -270,7 +269,7 @@ func TestImportAssetProof(t *testing.T) {
 	updatedBlob := bytes.Repeat([]byte{0x77}, 100)
 	testProof := &proof.AnnotatedProof{
 		Locator: proof.Locator{
-			AssetID:   &assetID,
+			AssetID:   &testAsset.ID,
 			ScriptKey: *testAsset.ScriptKey.PubKey,
 		},
 		Blob: initialBlob,
@@ -593,20 +592,19 @@ func (a *assetGenerator) genAssets(t *testing.T, assetStore *AssetStore,
 		if desc.spent {
 			var (
 				scriptKey = newAsset.ScriptKey.PubKey
-				id        = newAsset.ID()
 			)
 			params := SetAssetSpentParams{
 				ScriptKey:  scriptKey.SerializeCompressed(),
-				GenAssetID: id[:],
+				GenAssetID: newAsset.ID[:],
 			}
 			_, err := assetStore.db.SetAssetSpent(ctx, params)
 			require.NoError(t, err)
 		}
 
 		if !desc.leasedUntil.IsZero() {
-			owner := newAsset.ID()
 			err = assetStore.LeaseCoins(
-				ctx, owner, desc.leasedUntil, desc.anchorPoint,
+				ctx, newAsset.ID, desc.leasedUntil,
+				desc.anchorPoint,
 			)
 			require.NoError(t, err)
 		}
@@ -1072,7 +1070,7 @@ func TestSelectCommitment(t *testing.T) {
 
 			sa := selectedAssets[0]
 			assetCommitment, err := assetsStore.FetchCommitment(
-				ctx, sa.Asset.ID(), sa.AnchorPoint,
+				ctx, sa.Asset.ID, sa.AnchorPoint,
 				sa.Asset.GroupKey, &sa.Asset.ScriptKey, false,
 			)
 			require.NoError(t, err)
@@ -1084,7 +1082,7 @@ func TestSelectCommitment(t *testing.T) {
 
 			// And make sure we get a proper error if we try to
 			// fetch an asset with an invalid asset ID.
-			wrongID := sa.Asset.ID()
+			wrongID := sa.Asset.ID
 			wrongID[0] ^= 0x01
 			assetCommitment, err = assetsStore.FetchCommitment(
 				ctx, wrongID, sa.AnchorPoint,
@@ -1212,7 +1210,7 @@ func TestAssetExportLog(t *testing.T) {
 					Hash:  assetGen.anchorTxs[0].TxHash(),
 					Index: 0,
 				},
-				ID: inputAsset.ID(),
+				ID: inputAsset.ID,
 				ScriptKey: asset.ToSerialized(
 					inputAsset.ScriptKey.PubKey,
 				),
@@ -1287,18 +1285,17 @@ func TestAssetExportLog(t *testing.T) {
 		ctx, spendDelta, leaseOwner, leaseExpiry,
 	))
 
-	assetID := inputAsset.ID()
 	proofs := map[asset.SerializedKey]*proof.AnnotatedProof{
 		asset.ToSerialized(newScriptKey.PubKey): {
 			Locator: proof.Locator{
-				AssetID:   &assetID,
+				AssetID:   &inputAsset.ID,
 				ScriptKey: *newScriptKey.PubKey,
 			},
 			Blob: receiverBlob,
 		},
 		asset.ToSerialized(newScriptKey2.PubKey): {
 			Locator: proof.Locator{
-				AssetID:   &assetID,
+				AssetID:   &inputAsset.ID,
 				ScriptKey: *newScriptKey2.PubKey,
 			},
 			Blob: senderBlob,
@@ -1665,7 +1662,7 @@ func TestFetchGroupedAssets(t *testing.T) {
 
 	// Check for equality of all asset fields.
 	equalityCheck := func(a *asset.Asset, b *AssetHumanReadable) {
-		require.Equal(t, a.ID(), b.ID)
+		require.Equal(t, a.ID, b.ID)
 		require.Equal(t, a.Amount, b.Amount)
 		require.Equal(t, a.LockTime, b.LockTime)
 		require.Equal(t, a.RelativeLockTime, b.RelativeLockTime)

@@ -103,11 +103,10 @@ func virtualGenesisTxOut(newAsset *Asset) (*wire.TxOut, error) {
 	// Commit to the new asset directly. In this case, the output script is
 	// derived from the root of a MS-SMT containing the new asset.
 	groupKey := schnorr.SerializePubKey(&newAsset.GroupKey.GroupPubKey)
-	assetID := newAsset.Genesis.ID()
 
 	h := sha256.New()
 	_, _ = h.Write(groupKey)
-	_, _ = h.Write(assetID[:])
+	_, _ = h.Write(newAsset.ID[:])
 	_, _ = h.Write(schnorr.SerializePubKey(newAsset.ScriptKey.PubKey))
 
 	key := *(*[32]byte)(h.Sum(nil))
@@ -393,6 +392,8 @@ type TestVectors struct {
 func NewTestFromAsset(t testing.TB, a *Asset) *TestAsset {
 	ta := &TestAsset{
 		Version:             uint8(a.Version),
+		ID:                  hex.EncodeToString(a.ID[:]),
+		Type:                uint8(a.Type),
 		GenesisFirstPrevOut: a.Genesis.FirstPrevOut.String(),
 		GenesisTag:          a.Genesis.Tag,
 		GenesisMetaHash:     hex.EncodeToString(a.Genesis.MetaHash[:]),
@@ -426,6 +427,8 @@ func NewTestFromAsset(t testing.TB, a *Asset) *TestAsset {
 
 type TestAsset struct {
 	Version             uint8           `json:"version"`
+	ID                  string          `json:"id"`
+	Type                uint8           `json:"type"`
 	GenesisFirstPrevOut string          `json:"genesis_first_prev_out"`
 	GenesisTag          string          `json:"genesis_tag"`
 	GenesisMetaHash     string          `json:"genesis_meta_hash"`
@@ -470,6 +473,8 @@ func (ta *TestAsset) ToAsset(t testing.TB) *Asset {
 
 	a := &Asset{
 		Version: Version(ta.Version),
+		ID:      test.Parse32Byte(t, ta.ID),
+		Type:    Type(ta.Type),
 		Genesis: Genesis{
 			FirstPrevOut: test.ParseOutPoint(
 				t, ta.GenesisFirstPrevOut,

@@ -879,7 +879,7 @@ func (c *ChainPlanter) updateMintingProofs(proofs []*proof.Proof) error {
 		// to update this asset in. This is either the assetID or the
 		// group key.
 		uniID := universe.Identifier{
-			AssetID: p.Asset.ID(),
+			AssetID: p.Asset.ID,
 		}
 		if p.Asset.GroupKey != nil {
 			uniID.GroupKey = &p.Asset.GroupKey.GroupPubKey

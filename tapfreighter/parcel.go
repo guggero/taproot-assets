@@ -384,7 +384,7 @@ func (s *sendPackage) prepareForStorage(currentHeight uint32) (*OutboundParcel,
 		parcel.Inputs[idx] = TransferInput{
 			PrevID: asset.PrevID{
 				OutPoint: *anchorOutPoint,
-				ID:       vIn.Asset().ID(),
+				ID:       vIn.Asset().ID,
 				ScriptKey: asset.ToSerialized(
 					vIn.Asset().ScriptKey.PubKey,
 				),
@@ -706,7 +706,7 @@ func addOtherOutputExclusionProofs(outputs []*tappsbt.VOutput,
 
 		log.Tracef("Generated exclusion proof for anchor output index "+
 			"%d with asset_id=%v, taproot_asset_root=%x, "+
-			"internal_key=%x", outIndex, asset.ID(),
+			"internal_key=%x", outIndex, asset.ID,
 			fn.ByteSlice(tapTree.TapscriptRoot(nil)),
 			vOut.AnchorOutputInternalKey.SerializeCompressed())
 

@@ -802,7 +802,7 @@ func TestSplitCommitment(t *testing.T) {
 			// InputSet.
 			prevID := asset.PrevID{
 				OutPoint: outPoint,
-				ID:       input.Genesis.ID(),
+				ID:       input.ID,
 				ScriptKey: asset.ToSerialized(
 					input.ScriptKey.PubKey,
 				),
@@ -812,7 +812,7 @@ func TestSplitCommitment(t *testing.T) {
 			require.Equal(t, *input, *prevAsset)
 
 			// Verify that the root asset was constructed properly.
-			require.Equal(t, root.AssetID, split.RootAsset.Genesis.ID())
+			require.Equal(t, root.AssetID, split.RootAsset.ID)
 			require.Equal(
 				t, root.ScriptKey.SchnorrSerialized(),
 				schnorr.SerializePubKey(
@@ -841,7 +841,7 @@ func TestSplitCommitment(t *testing.T) {
 					)
 				}
 
-				require.Equal(t, l.AssetID, splitAsset.Genesis.ID())
+				require.Equal(t, l.AssetID, splitAsset.ID)
 				require.Equal(
 					t, l.ScriptKey.SchnorrSerialized(),
 					schnorr.SerializePubKey(

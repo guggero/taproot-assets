@@ -98,11 +98,13 @@ func parseCommon(assets ...*asset.Asset) (*AssetCommitment, error) {
 		assetType        asset.Type
 		tapCommitmentKey [32]byte
 		maxVersion       = asset.Version(0)
-		assetGenesis     = assets[0].Genesis.ID()
+		assetGenesis     = assets[0].ID
 		assetGroupKey    = assets[0].GroupKey
 		assetsMap        = make(CommittedAssets, len(assets))
 	)
 	for idx, newAsset := range assets {
+		newAsset := newAsset
+
 		// Inspect the first asset to note properties which should be
 		// consistent across all assets.
 		if idx == 0 {
@@ -125,7 +127,7 @@ func parseCommon(assets ...*asset.Asset) (*AssetCommitment, error) {
 			return nil, ErrAssetGroupKeyMismatch
 
 		case assetGroupKey == nil:
-			if assetGenesis != newAsset.Genesis.ID() {
+			if assetGenesis != newAsset.ID {
 				return nil, ErrAssetGenesisMismatch
 			}
 		}

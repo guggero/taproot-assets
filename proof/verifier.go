@@ -78,7 +78,7 @@ func verifyTaprootProof(anchor *wire.MsgTx, proof *TaprootProof,
 	// tapscript tree, which will then be tweaked as normal with the
 	// internal key to derive the expected output key.
 	case inclusion:
-		log.Tracef("Verifying inclusion proof for asset %v", asset.ID())
+		log.Tracef("Verifying inclusion proof for asset %v", asset.ID)
 		derivedKey, tapCommitment, err = proof.DeriveByAssetInclusion(
 			asset,
 		)
@@ -88,7 +88,7 @@ func verifyTaprootProof(anchor *wire.MsgTx, proof *TaprootProof,
 	// commitment exists, or one does, but the asset in question isn't
 	// present.
 	case proof.CommitmentProof != nil:
-		log.Tracef("Verifying exclusion proof for asset %v", asset.ID())
+		log.Tracef("Verifying exclusion proof for asset %v", asset.ID)
 		derivedKey, err = proof.DeriveByAssetExclusion(
 			asset.AssetCommitmentKey(),
 			asset.TapCommitmentKey(),
@@ -189,7 +189,7 @@ func (p *Proof) verifyAssetStateTransition(ctx context.Context,
 		prevAssets = commitment.InputSet{
 			asset.PrevID{
 				OutPoint: p.PrevOut,
-				ID:       prev.Asset.Genesis.ID(),
+				ID:       prev.Asset.ID,
 				ScriptKey: asset.ToSerialized(
 					prev.Asset.ScriptKey.PubKey,
 				),
@@ -221,7 +221,7 @@ func (p *Proof) verifyAssetStateTransition(ctx context.Context,
 			defer assetsMtx.Unlock()
 			prevID := asset.PrevID{
 				OutPoint: result.OutPoint,
-				ID:       result.Asset.Genesis.ID(),
+				ID:       result.Asset.ID,
 				ScriptKey: asset.ToSerialized(
 					result.Asset.ScriptKey.PubKey,
 				),
@@ -287,8 +287,7 @@ func (p *Proof) verifyGenesisReveal() error {
 
 	// The genesis reveal determines the ID of an asset, so make sure it is
 	// consistent.
-	assetID := p.Asset.ID()
-	if reveal.ID() != assetID {
+	if reveal.ID() != p.Asset.ID {
 		return ErrGenesisRevealAssetIDMismatch
 	}
 
@@ -350,7 +349,7 @@ func (p *Proof) verifyGroupKeyReveal() error {
 		return ErrGroupKeyRevealRequired
 	}
 
-	revealedKey, err := reveal.GroupPubKey(p.Asset.ID())
+	revealedKey, err := reveal.GroupPubKey(p.Asset.ID)
 	if err != nil {
 		return err
 	}

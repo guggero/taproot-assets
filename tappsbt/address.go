@@ -141,7 +141,7 @@ func OwnershipProofPacket(ownedAsset *asset.Asset,
 	// TODO(guggero): Revisit this proof once we support pocket universes.
 	emptyOutPoint := wire.OutPoint{}
 	prevId := asset.PrevID{
-		ID:       ownedAsset.ID(),
+		ID:       ownedAsset.ID,
 		OutPoint: emptyOutPoint,
 		ScriptKey: asset.ToSerialized(
 			ownedAsset.ScriptKey.PubKey,

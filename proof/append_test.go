@@ -209,19 +209,19 @@ func runAppendTransitionTest(t *testing.T, assetType asset.Type, amt uint64,
 	}
 	rootLocator := &commitment.SplitLocator{
 		OutputIndex: 0,
-		AssetID:     newAsset.ID(),
+		AssetID:     newAsset.ID,
 		ScriptKey:   asset.ToSerialized(split1PrivKey.PubKey()),
 		Amount:      40,
 	}
 	split2Locator := &commitment.SplitLocator{
 		OutputIndex: 1,
-		AssetID:     newAsset.ID(),
+		AssetID:     newAsset.ID,
 		ScriptKey:   asset.ToSerialized(split2PrivKey.PubKey()),
 		Amount:      40,
 	}
 	split3Locator := &commitment.SplitLocator{
 		OutputIndex: 2,
-		AssetID:     newAsset.ID(),
+		AssetID:     newAsset.ID,
 		ScriptKey:   asset.ToSerialized(split3PrivKey.PubKey()),
 		Amount:      20,
 	}
@@ -487,7 +487,7 @@ func signAssetTransfer(t testing.TB, prevProof *Proof, newAsset *asset.Asset,
 	}
 	prevID := &asset.PrevID{
 		OutPoint: prevOutpoint,
-		ID:       prevProof.Asset.ID(),
+		ID:       prevProof.Asset.ID,
 		ScriptKey: asset.ToSerialized(
 			prevProof.Asset.ScriptKey.PubKey,
 		),

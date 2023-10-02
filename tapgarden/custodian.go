@@ -697,6 +697,6 @@ func AddrMatchesAsset(addr *address.AddrWithKeyInfo, a *asset.Asset) bool {
 	groupKeyEqual := groupKeyBothNil ||
 		addr.GroupKey.IsEqual(&a.GroupKey.GroupPubKey)
 
-	return addr.AssetID == a.ID() && groupKeyEqual &&
+	return addr.AssetID == a.ID && groupKeyEqual &&
 		addr.ScriptKey.IsEqual(a.ScriptKey.PubKey)
 }

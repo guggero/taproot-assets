@@ -448,8 +448,7 @@ func (m *MultiArchiver) ImportProofs(ctx context.Context,
 		// transition) to create a proper annotated proof. We only need
 		// to do this if it wasn't specified though.
 		if proof.AssetID == nil {
-			assetID := finalAsset.ID()
-			proof.AssetID = &assetID
+			proof.AssetID = &finalAsset.ID
 
 			if finalAsset.GroupKey != nil {
 				proof.GroupKey = &finalAsset.GroupKey.GroupPubKey
@@ -550,15 +549,14 @@ func ReplaceProofInBlob(ctx context.Context, p *Proof, archive Archiver,
 		return nil
 	}
 
-	assetID := p.Asset.ID()
 	scriptPubKeyOfUpdate := p.Asset.ScriptKey.PubKey
 
 	// We now fetch all proofs of that same asset ID and filter out those
 	// that need updating.
-	proofs, err := archive.FetchProofs(ctx, assetID)
+	proofs, err := archive.FetchProofs(ctx, p.Asset.ID)
 	if err != nil {
 		return fmt.Errorf("unable to fetch all proofs for asset ID "+
-			"%x: %w", assetID[:], err)
+			"%x: %w", p.Asset.ID[:], err)
 	}
 
 	for idx := range proofs {

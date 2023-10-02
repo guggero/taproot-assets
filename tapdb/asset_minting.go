@@ -672,9 +672,9 @@ func fetchAssetMetas(ctx context.Context, db PendingAssetStore,
 
 	assetMetas := make(map[asset.SerializedKey]*proof.MetaReveal)
 	for _, assetT := range assets {
-		assetID := assetT.ID()
+		assetT := assetT
 
-		assetMeta, err := db.FetchAssetMetaForAsset(ctx, assetID[:])
+		assetMeta, err := db.FetchAssetMetaForAsset(ctx, assetT.ID[:])
 		switch {
 		// If the asset doesn't have a meta data reveal, then we can
 		// skip it.

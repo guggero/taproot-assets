@@ -438,7 +438,7 @@ func (f *AssetWallet) passiveAssetVPacket(passiveAsset *asset.Asset,
 	inputAsset := passiveAsset.Copy()
 	inputPrevId := asset.PrevID{
 		OutPoint: anchorPoint,
-		ID:       inputAsset.ID(),
+		ID:       inputAsset.ID,
 		ScriptKey: asset.ToSerialized(
 			inputAsset.ScriptKey.PubKey,
 		),
@@ -907,9 +907,8 @@ func (f *AssetWallet) setVPacketInputs(ctx context.Context,
 		// We'll also include an inclusion proof for the input asset in
 		// the virtual transaction. With that a signer can verify that
 		// the asset was actually committed to in the anchor output.
-		assetID := assetInput.Asset.ID()
 		proofLocator := proof.Locator{
-			AssetID:   &assetID,
+			AssetID:   &assetInput.Asset.ID,
 			ScriptKey: *assetInput.Asset.ScriptKey.PubKey,
 		}
 		if assetInput.Asset.GroupKey != nil {
@@ -950,7 +949,7 @@ func (f *AssetWallet) setVPacketInputs(ctx context.Context,
 		vPkt.Inputs[idx] = &tappsbt.VInput{
 			PrevID: asset.PrevID{
 				OutPoint: assetInput.AnchorPoint,
-				ID:       assetInput.Asset.ID(),
+				ID:       assetInput.Asset.ID,
 				ScriptKey: asset.ToSerialized(
 					assetInput.Asset.ScriptKey.PubKey,
 				),
@@ -1254,7 +1253,7 @@ func (f *AssetWallet) SignPassiveAssets(vPkt *tappsbt.VPacket,
 				)
 				reAnchor := &PassiveAssetReAnchor{
 					VPacket:         passivePkt,
-					GenesisID:       passiveAsset.ID(),
+					GenesisID:       passiveAsset.ID,
 					PrevAnchorPoint: anchorPoint,
 					ScriptKey:       passiveAsset.ScriptKey,
 				}
@@ -1413,7 +1412,7 @@ func (f *AssetWallet) SignOwnershipProof(
 	ownedAsset *asset.Asset) (wire.TxWitness, error) {
 
 	outputAsset := ownedAsset.Copy()
-	log.Infof("Generating ownership proof for asset %v", outputAsset.ID())
+	log.Infof("Generating ownership proof for asset %v", outputAsset.ID)
 
 	vPkt := tappsbt.OwnershipProofPacket(
 		ownedAsset.Copy(), f.cfg.ChainParams,

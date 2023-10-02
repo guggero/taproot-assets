@@ -822,6 +822,12 @@ type Asset struct {
 	// Version is the Taproot Asset version of the asset.
 	Version Version
 
+	// ID is the unique asset ID derived from the asset's genesis
+	ID ID
+
+	// Type uniquely identifies the type of Taproot asset.
+	Type Type
+
 	// Genesis encodes an asset's genesis metadata which directly maps to
 	// its unique ID within the Taproot Asset protocol.
 	Genesis
@@ -900,6 +906,8 @@ func New(genesis Genesis, amount, locktime, relativeLocktime uint64,
 
 	return &Asset{
 		Version:             V0,
+		ID:                  genesis.ID(),
+		Type:                genesis.Type,
 		Genesis:             genesis,
 		Amount:              amount,
 		LockTime:            locktime,
@@ -927,9 +935,9 @@ func TapCommitmentKey(assetID ID, groupKey *btcec.PublicKey) [32]byte {
 // asset group within a TapCommitment.
 func (a *Asset) TapCommitmentKey() [32]byte {
 	if a.GroupKey == nil {
-		return TapCommitmentKey(a.Genesis.ID(), nil)
+		return TapCommitmentKey(a.ID, nil)
 	}
-	return TapCommitmentKey(a.Genesis.ID(), &a.GroupKey.GroupPubKey)
+	return TapCommitmentKey(a.ID, &a.GroupKey.GroupPubKey)
 }
 
 // AssetCommitmentKey returns a key which can be used to locate an
@@ -954,9 +962,7 @@ func AssetCommitmentKey(assetID ID, scriptKey *btcec.PublicKey,
 // within a Taproot AssetCommitment.
 func (a *Asset) AssetCommitmentKey() [32]byte {
 	issuanceDisabled := a.GroupKey == nil
-	return AssetCommitmentKey(
-		a.Genesis.ID(), a.ScriptKey.PubKey, issuanceDisabled,
-	)
+	return AssetCommitmentKey(a.ID, a.ScriptKey.PubKey, issuanceDisabled)
 }
 
 // HasGenesisWitness determines whether an asset has a valid genesis witness,
@@ -1141,7 +1147,7 @@ func (a *Asset) DeepEqual(o *Asset) bool {
 	}
 
 	// The ID commits to everything in the Genesis, including the type.
-	if a.ID() != o.ID() {
+	if a.ID != o.ID {
 		return false
 	}
 

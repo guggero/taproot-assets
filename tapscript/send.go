@@ -304,7 +304,7 @@ func PrepareOutputAssets(ctx context.Context, vPkt *tappsbt.VPacket) error {
 		//
 		// TODO(ffranr): Add support for multiple different input asset
 		// IDs.
-		assetID = inputs[0].Asset().ID()
+		assetID = inputs[0].Asset().ID
 
 		// Inspect first asset to determine all input asset types.
 		inputAssetType = inputs[0].Asset().Type
@@ -344,7 +344,7 @@ func PrepareOutputAssets(ctx context.Context, vPkt *tappsbt.VPacket) error {
 		// multiple inputs with the same asset ID. We need to support
 		// multiple input assets from the same group but do not
 		// necessarily share the same asset ID.
-		if idx > 0 && inputs[idx].Asset().ID() != assetID {
+		if idx > 0 && inputs[idx].Asset().ID != assetID {
 			return fmt.Errorf("multiple input assets " +
 				"must have the same asset ID")
 		}
@@ -722,8 +722,8 @@ func CreateOutputCommitments(inputTapCommitments tappsbt.InputCommitments,
 		}
 
 		// For multi input, assert asset is not part of a group.
-		firstAssetGen := inputs[0].Asset().Genesis
-		assetInGroup := firstAssetGen.ID() != assetsTapCommitmentKey
+		firstAssetID := inputs[0].Asset().ID
+		assetInGroup := firstAssetID != assetsTapCommitmentKey
 		if len(inputs) > 1 && assetInGroup {
 			return nil, fmt.Errorf("multi input spend may not " +
 				"include input from asset group")
