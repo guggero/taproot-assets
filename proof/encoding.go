@@ -359,7 +359,7 @@ func MetaTypeDecoder(r io.Reader, val any, buf *[8]byte, l uint64) error {
 
 func GenesisRevealEncoder(w io.Writer, val any, buf *[8]byte) error {
 	if t, ok := val.(**asset.Genesis); ok {
-		return asset.GenesisEncoder(w, (*t), buf)
+		return asset.GenesisRevealEncoder(w, (*t), buf)
 	}
 
 	return tlv.NewTypeForEncodingErr(val, "GenesisReveal")
@@ -368,7 +368,8 @@ func GenesisRevealEncoder(w io.Writer, val any, buf *[8]byte) error {
 func GenesisRevealDecoder(r io.Reader, val any, buf *[8]byte, l uint64) error {
 	if typ, ok := val.(**asset.Genesis); ok {
 		var genesis asset.Genesis
-		if err := asset.GenesisDecoder(r, &genesis, buf, l); err != nil {
+		err := asset.GenesisRevealDecoder(r, &genesis, buf, l)
+		if err != nil {
 			return err
 		}
 

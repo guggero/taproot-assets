@@ -550,16 +550,12 @@ func universeFetchProofLeaf(ctx context.Context,
 			ScriptKey: &scriptKey,
 		}
 		smtKey := universeKey.UniverseKey()
-		leafProof, err := universeTree.MerkleProof(
-			ctx, smtKey,
-		)
+		leafProof, err := universeTree.MerkleProof(ctx, smtKey)
 		if err != nil {
 			return err
 		}
 
-		leafAssetGen, err := fetchGenesis(
-			ctx, dbTx, leaf.GenAssetID,
-		)
+		leafAssetGen, err := fetchGenesis(ctx, dbTx, leaf.GenAssetID)
 		if err != nil {
 			return err
 		}
@@ -569,6 +565,10 @@ func universeFetchProofLeaf(ctx context.Context,
 		if err != nil {
 			return fmt.Errorf("unable to decode proof: %w", err)
 		}
+
+		// The proof's asset doesn't encode the genesis record, so we'll
+		// attach it now.
+		genProof.Asset.AttachGenesis(&leafAssetGen)
 
 		issuanceProof := &universe.Proof{
 			LeafKey:                universeKey,

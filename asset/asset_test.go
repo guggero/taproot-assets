@@ -53,7 +53,9 @@ var (
 	}
 	testSplitAsset = &Asset{
 		Version:          1,
-		Genesis:          splitGen,
+		ID:               splitGen.ID(),
+		Type:             splitGen.Type,
+		genesis:          &splitGen,
 		Amount:           1,
 		LockTime:         1337,
 		RelativeLockTime: 6,
@@ -78,7 +80,9 @@ var (
 	}
 	testRootAsset = &Asset{
 		Version:          1,
-		Genesis:          testSplitAsset.Copy().Genesis,
+		ID:               splitGen.ID(),
+		Type:             splitGen.Type,
+		genesis:          &splitGen,
 		Amount:           1,
 		LockTime:         1337,
 		RelativeLockTime: 6,
@@ -360,7 +364,9 @@ func TestAssetEncoding(t *testing.T) {
 	comment := "random asset with multiple previous witnesses"
 	assertAssetEncoding(comment, &Asset{
 		Version:          2,
-		Genesis:          newGen,
+		ID:               newGen.ID(),
+		Type:             newGen.Type,
+		genesis:          &newGen,
 		Amount:           2,
 		LockTime:         1337,
 		RelativeLockTime: 6,
@@ -391,7 +397,7 @@ func TestAssetEncoding(t *testing.T) {
 	})
 
 	assertAssetEncoding("minimal asset", &Asset{
-		Genesis: Genesis{
+		genesis: &Genesis{
 			MetaHash: [MetaHashLen]byte{},
 		},
 		ScriptKey: NewScriptKey(pubKey),
@@ -614,7 +620,9 @@ func TestUnknownVersion(t *testing.T) {
 
 	root := &Asset{
 		Version:          212,
-		Genesis:          rootGen,
+		ID:               rootGen.ID(),
+		Type:             rootGen.Type,
+		genesis:          &rootGen,
 		Amount:           1,
 		LockTime:         1337,
 		RelativeLockTime: 6,

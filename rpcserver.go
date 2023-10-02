@@ -2883,7 +2883,7 @@ func (r *rpcServer) marshalIssuanceProof(ctx context.Context,
 
 	assetLeaf, err := r.marshalAssetLeaf(ctx, proof.Leaf)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error marshaling leaf: %w", err)
 	}
 
 	uniRoot, err := marshalUniverseRoot(universe.BaseRoot{
@@ -2945,7 +2945,7 @@ func (r *rpcServer) QueryProof(ctx context.Context,
 		rpcsLog.Debugf("[QueryProof]: error querying for proof at "+
 			"(universeID=%x, leafKey=%x)", universeID,
 			leafKey.UniverseKey())
-		return nil, err
+		return nil, fmt.Errorf("error fetching proof: %w", err)
 	}
 
 	// TODO(roasbeef): query may return multiple proofs, if allow key to
@@ -2973,9 +2973,18 @@ func unmarshalAssetLeaf(leaf *unirpc.AssetLeaf) (*universe.Leaf, error) {
 	// TODO(roasbeef): double check posted file format everywhere
 	//  * raw proof, or within file?
 
+	genesis := assetProof.Asset.Genesis()
+	if genesis == nil {
+		genesis = assetProof.GenesisReveal
+
+		if genesis == nil {
+			return nil, asset.ErrAssetMissingGenesis
+		}
+	}
+
 	return &universe.Leaf{
 		GenesisWithGroup: universe.GenesisWithGroup{
-			Genesis:  assetProof.Asset.Genesis,
+			Genesis:  *genesis,
 			GroupKey: assetProof.Asset.GroupKey,
 		},
 		Proof: &assetProof,

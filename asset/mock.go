@@ -391,19 +391,22 @@ type TestVectors struct {
 
 func NewTestFromAsset(t testing.TB, a *Asset) *TestAsset {
 	ta := &TestAsset{
-		Version:             uint8(a.Version),
-		ID:                  hex.EncodeToString(a.ID[:]),
-		Type:                uint8(a.Type),
-		GenesisFirstPrevOut: a.Genesis.FirstPrevOut.String(),
-		GenesisTag:          a.Genesis.Tag,
-		GenesisMetaHash:     hex.EncodeToString(a.Genesis.MetaHash[:]),
-		GenesisOutputIndex:  a.Genesis.OutputIndex,
-		GenesisType:         uint8(a.Genesis.Type),
-		Amount:              a.Amount,
-		LockTime:            a.LockTime,
-		RelativeLockTime:    a.RelativeLockTime,
-		ScriptVersion:       uint16(a.ScriptVersion),
-		ScriptKey:           test.HexPubKey(a.ScriptKey.PubKey),
+		Version:          uint8(a.Version),
+		ID:               hex.EncodeToString(a.ID[:]),
+		Type:             uint8(a.Type),
+		Amount:           a.Amount,
+		LockTime:         a.LockTime,
+		RelativeLockTime: a.RelativeLockTime,
+		ScriptVersion:    uint16(a.ScriptVersion),
+		ScriptKey:        test.HexPubKey(a.ScriptKey.PubKey),
+	}
+
+	if a.genesis != nil {
+		ta.GenesisFirstPrevOut = a.genesis.FirstPrevOut.String()
+		ta.GenesisTag = a.genesis.Tag
+		ta.GenesisMetaHash = hex.EncodeToString(a.genesis.MetaHash[:])
+		ta.GenesisOutputIndex = a.genesis.OutputIndex
+		ta.GenesisType = uint8(a.genesis.Type)
 	}
 
 	for _, w := range a.PrevWitnesses {
@@ -475,7 +478,7 @@ func (ta *TestAsset) ToAsset(t testing.TB) *Asset {
 		Version: Version(ta.Version),
 		ID:      test.Parse32Byte(t, ta.ID),
 		Type:    Type(ta.Type),
-		Genesis: Genesis{
+		genesis: &Genesis{
 			FirstPrevOut: test.ParseOutPoint(
 				t, ta.GenesisFirstPrevOut,
 			),

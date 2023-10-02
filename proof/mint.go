@@ -261,14 +261,14 @@ func committedProofs(baseProof *Proof, tapTreeRoot *commitment.TapCommitment,
 		// Set the genesis reveal info on the minting proof. To save on
 		// some space, the genesis info is no longer included in
 		// transition proofs.
-		assetProof.GenesisReveal = &newAsset.Genesis
+		assetProof.GenesisReveal = newAsset.Genesis()
 
 		// If the asset has a group key, we only need to populate the
 		// group key reveal if the asset is the group anchor.
 		if newAsset.GroupKey != nil {
 			groupKey := newAsset.GroupKey
 
-			err := groupAnchorVerifier(&newAsset.Genesis, groupKey)
+			err := groupAnchorVerifier(newAsset.Genesis(), groupKey)
 			if err == nil {
 				groupReveal := &asset.GroupKeyReveal{
 					RawKey: asset.ToSerialized(

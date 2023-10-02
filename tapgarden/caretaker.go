@@ -661,7 +661,12 @@ func (b *BatchCaretaker) stateStep(currentState BatchState) (BatchState, error) 
 		for _, newAsset := range tapCommitment.CommittedAssets() {
 			newAsset := newAsset
 
-			seedling, ok := b.cfg.Batch.Seedlings[newAsset.Tag]
+			gen := newAsset.Genesis()
+			if gen == nil {
+				return 0, asset.ErrAssetMissingGenesis
+			}
+
+			seedling, ok := b.cfg.Batch.Seedlings[gen.Tag]
 			if !ok {
 				continue
 			}
@@ -1094,7 +1099,7 @@ func (b *BatchCaretaker) storeMintingProof(ctx context.Context,
 	// The universe ID serves to identifier the universe root we want to add
 	// this asset to. This is either the assetID or the group key.
 	uniID := universe.Identifier{
-		AssetID: assetID,
+		AssetID: a.ID,
 	}
 
 	groupKey := a.GroupKey
@@ -1119,7 +1124,7 @@ func (b *BatchCaretaker) storeMintingProof(ctx context.Context,
 	// With both of those assembled, we can now register issuance which
 	// takes the amount and proof of the minting event.
 	uniGen := universe.GenesisWithGroup{
-		Genesis: a.Genesis,
+		Genesis: *a.Genesis(),
 	}
 	if groupKey != nil {
 		uniGen.GroupKey = groupKey
@@ -1212,7 +1217,7 @@ func SortAssets(fullAssets []*asset.Asset,
 		switch {
 		case fullAsset.GroupKey != nil:
 			err := anchorVerifier(
-				&fullAsset.Genesis,
+				fullAsset.Genesis(),
 				fullAsset.GroupKey,
 			)
 

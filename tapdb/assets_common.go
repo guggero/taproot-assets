@@ -169,11 +169,14 @@ func upsertAssetsWithGenesis(ctx context.Context, q UpsertAssetStore,
 	for idx, a := range assets {
 		a := a
 
+		gen := a.Genesis()
+		if gen == nil {
+			return 0, nil, asset.ErrAssetMissingGenesis
+		}
+
 		// First, we make sure the genesis asset information exists in
 		// the database.
-		genAssetID, err := upsertGenesis(
-			ctx, q, genesisPointID, a.Genesis,
-		)
+		genAssetID, err := upsertGenesis(ctx, q, genesisPointID, *gen)
 		if err != nil {
 			return 0, nil, fmt.Errorf("unable to upsert genesis: "+
 				"%w", err)

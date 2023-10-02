@@ -496,7 +496,7 @@ func assertAssetsEqual(t *testing.T, a, b *commitment.TapCommitment) {
 	dbAssets := b.CommittedAssets()
 	for _, memAsset := range memAssets {
 		for _, dbAsset := range dbAssets {
-			if memAsset.Genesis.Tag == dbAsset.Genesis.Tag {
+			if memAsset.ID == dbAsset.ID {
 				require.Equal(t, memAsset, dbAsset)
 				numFound++
 				break

@@ -902,7 +902,7 @@ func (c *ChainPlanter) updateMintingProofs(proofs []*proof.Proof) error {
 		// With both of those assembled, we can now update issuance
 		// which takes the amount and proof of the minting event.
 		uniGen := universe.GenesisWithGroup{
-			Genesis: p.Asset.Genesis,
+			Genesis: *p.Asset.Genesis(),
 		}
 		if p.Asset.GroupKey != nil {
 			uniGen.GroupKey = p.Asset.GroupKey

@@ -179,12 +179,15 @@ func (ts TestSplitSet) ToSplitSet(t testing.TB) SplitSet {
 			Amount:      e.Locator.Amount,
 		}
 
+		emptyAsset := &asset.Asset{}
+		emptyAsset.AttachGenesis(&asset.Genesis{})
+
 		// We'll allow empty assets here.
 		var (
-			parsedAsset asset.Asset
-			emptyAsset  = asset.NewTestFromAsset(t, &asset.Asset{})
+			parsedAsset    asset.Asset
+			emptyAssetTest = asset.NewTestFromAsset(t, emptyAsset)
 		)
-		if !reflect.DeepEqual(e.Asset.Asset, emptyAsset) {
+		if !reflect.DeepEqual(e.Asset.Asset, emptyAssetTest) {
 			parsedAsset = *e.Asset.Asset.ToAsset(t)
 		}
 

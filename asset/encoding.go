@@ -261,7 +261,7 @@ func TypeDecoder(r io.Reader, val any, buf *[8]byte, l uint64) error {
 	return tlv.NewTypeForDecodingErr(val, "Type", l, 1)
 }
 
-func GenesisEncoder(w io.Writer, val any, buf *[8]byte) error {
+func GenesisRevealEncoder(w io.Writer, val any, buf *[8]byte) error {
 	if t, ok := val.(*Genesis); ok {
 		err := OutPointEncoder(w, &t.FirstPrevOut, buf)
 		if err != nil {
@@ -282,7 +282,7 @@ func GenesisEncoder(w io.Writer, val any, buf *[8]byte) error {
 	return tlv.NewTypeForEncodingErr(val, "Genesis")
 }
 
-func GenesisDecoder(r io.Reader, val any, buf *[8]byte, _ uint64) error {
+func GenesisRevealDecoder(r io.Reader, val any, buf *[8]byte, _ uint64) error {
 	if typ, ok := val.(*Genesis); ok {
 		var genesis Genesis
 		err := OutPointDecoder(r, &genesis.FirstPrevOut, buf, 0)

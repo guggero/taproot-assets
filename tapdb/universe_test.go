@@ -119,7 +119,7 @@ func randMintingLeaf(t *testing.T, assetGen asset.Genesis,
 
 	// The asset within the genesis proof is random; reset the asset genesis
 	// and group key to match the universe minting leaf.
-	leaf.Proof.Asset.Genesis = assetGen
+	leaf.Proof.Asset.AttachGenesis(&assetGen)
 	leaf.Proof.GenesisReveal = &assetGen
 
 	if groupKey != nil {

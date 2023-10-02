@@ -1424,21 +1424,23 @@ func (a *AssetStore) importAssetFromProof(ctx context.Context,
 	}
 
 	newAsset := proof.Asset
+	genesis := newAsset.Genesis()
+	if genesis == nil {
+		return asset.ErrAssetMissingGenesis
+	}
 
 	// If this proof also has a meta reveal (should only exist for genesis
 	// assets, so we skip that validation here), then we'll insert this now
 	// so the upsert below functions properly.
-	_, err = maybeUpsertAssetMeta(
-		ctx, db, &newAsset.Genesis, proof.MetaReveal,
-	)
+	_, err = maybeUpsertAssetMeta(ctx, db, genesis, proof.MetaReveal)
 	if err != nil {
 		return fmt.Errorf("unable to insert asset meta: %w", err)
 	}
 
 	// Insert/update the asset information in the database now.
 	_, assetIDs, err := upsertAssetsWithGenesis(
-		ctx, db, newAsset.Genesis.FirstPrevOut,
-		[]*asset.Asset{newAsset}, []sql.NullInt32{sqlInt32(utxoID)},
+		ctx, db, genesis.FirstPrevOut, []*asset.Asset{newAsset},
+		[]sql.NullInt32{sqlInt32(utxoID)},
 	)
 	if err != nil {
 		return fmt.Errorf("error inserting asset with genesis: %w", err)

@@ -145,7 +145,7 @@ func (r *RpcUniverseDiff) FetchIssuanceProof(ctx context.Context,
 		LeafKey: marshalLeafKey(key),
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error fetching remote proof: %w", err)
 	}
 
 	uniRoot, err := unmarshalUniverseRoot(uProofs.UniverseRoot)

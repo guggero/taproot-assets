@@ -321,7 +321,7 @@ func createGenesisProof(t *testing.T, state *spendData) {
 				Proof: *asset2CommitmentProof,
 			},
 		},
-		GenesisReveal: &state.asset2.Genesis,
+		GenesisReveal: state.asset2.Genesis(),
 	}
 
 	state.asset2GenesisProof = asset2GenesisProof
@@ -885,7 +885,7 @@ var signVirtualTransactionTestCases = []testCase{{
 		err := tapscript.PrepareOutputAssets(context.Background(), pkt)
 		require.NoError(t, err)
 
-		pkt.Inputs[0].Asset().Genesis = state.genesis1collect
+		pkt.Inputs[0].Asset().AttachGenesis(&state.genesis1collect)
 		return tapscript.SignVirtualTransaction(
 			pkt, state.signer, state.validator,
 		)

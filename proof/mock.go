@@ -94,6 +94,8 @@ type TestVectors struct {
 func NewTestFromProof(t testing.TB, p *Proof) *TestProof {
 	t.Helper()
 
+	p.Asset.AttachGenesis(p.GenesisReveal)
+
 	tp := &TestProof{
 		PrevOut:        p.PrevOut.String(),
 		BlockHeader:    NewTestFromBlockHeader(t, &p.BlockHeader),

@@ -491,11 +491,18 @@ func (t *mintingTestHarness) assertSeedlingsMatchSprouts(
 	require.Len(t, dbAssets, len(seedlings))
 
 	assetsByTag := make(map[string]*asset.Asset)
-	for _, asset := range dbAssets {
-		assetsByTag[asset.Genesis.Tag] = asset
+	for _, dbAsset := range dbAssets {
+		dbAsset := dbAsset
+
+		genesis := dbAsset.Genesis()
+		require.NotNil(t, genesis)
+
+		assetsByTag[genesis.Tag] = dbAsset
 	}
 
 	for _, seedling := range seedlings {
+		seedling := seedling
+
 		assetSprout, ok := assetsByTag[seedling.AssetName]
 		if !ok {
 			t.Fatalf("asset for seedling %v not found",
@@ -504,11 +511,11 @@ func (t *mintingTestHarness) assertSeedlingsMatchSprouts(
 
 		// We expect the seedling to have been properly mapped onto an
 		// asset.
+		genesis := assetSprout.Genesis()
+		require.NotNil(t, genesis)
 		require.Equal(t, seedling.AssetType, assetSprout.Type)
-		require.Equal(t, seedling.AssetName, assetSprout.Genesis.Tag)
-		require.Equal(
-			t, seedling.Meta.MetaHash(), assetSprout.Genesis.MetaHash,
-		)
+		require.Equal(t, seedling.AssetName, genesis.Tag)
+		require.Equal(t, seedling.Meta.MetaHash(), genesis.MetaHash)
 		require.Equal(t, seedling.Amount, assetSprout.Amount)
 		require.Equal(
 			t, seedling.EnableEmission, assetSprout.GroupKey != nil,

@@ -15,7 +15,7 @@ type LeafTlvType = tlv.Type
 
 const (
 	LeafVersion             LeafTlvType = 0
-	LeafGenesis             LeafTlvType = 1
+	LeafAssetID             LeafTlvType = 1
 	LeafType                LeafTlvType = 2
 	LeafAmount              LeafTlvType = 3
 	LeafLockTime            LeafTlvType = 4
@@ -25,9 +25,6 @@ const (
 	LeafScriptVersion       LeafTlvType = 8
 	LeafScriptKey           LeafTlvType = 9
 	LeafGroupKey            LeafTlvType = 10
-
-	// Types for future asset format.
-	LeafAssetID LeafTlvType = 11
 )
 
 // WitnessTlvType represents the different TLV types for Asset Witness TLV
@@ -50,22 +47,6 @@ func NewLeafIDRecord(id *ID) tlv.Record {
 	const recordSize = sha256.Size
 	return tlv.MakeStaticRecord(
 		LeafAssetID, id, recordSize, IDEncoder, IDDecoder,
-	)
-}
-
-func NewLeafGenesisRecord(genesis *Genesis) tlv.Record {
-	recordSize := func() uint64 {
-		var (
-			b   bytes.Buffer
-			buf [8]byte
-		)
-		if err := GenesisEncoder(&b, genesis, &buf); err != nil {
-			panic(err)
-		}
-		return uint64(len(b.Bytes()))
-	}
-	return tlv.MakeDynamicRecord(
-		LeafGenesis, genesis, recordSize, GenesisEncoder, GenesisDecoder,
 	)
 }
 

@@ -148,13 +148,10 @@ func randAsset(t *testing.T, genOpts ...assetGenOpt) *asset.Asset {
 
 	require.NoError(t, err)
 
-	newAsset := &asset.Asset{
-		Genesis:          genesis,
-		Amount:           opts.amt,
-		LockTime:         lockTime,
-		RelativeLockTime: relativeLockTime,
-		ScriptKey:        opts.scriptKey,
-	}
+	newAsset := asset.NewAssetNoErr(
+		t, genesis, opts.amt, lockTime, relativeLockTime,
+		opts.scriptKey, nil,
+	)
 
 	// 50/50 chance that we'll actually have a group key. Or we'll always
 	// use it if a custom group key was specified.
@@ -368,7 +365,7 @@ func TestImportAssetProof(t *testing.T) {
 	if testAsset.GroupKey != nil {
 		assetConstraints.GroupKey = &testAsset.GroupKey.GroupPubKey
 	} else {
-		assetConstraints.AssetID = &assetID
+		assetConstraints.AssetID = &testAsset.ID
 	}
 	selectedAssets, err := assetStore.ListEligibleCoins(
 		ctxb, assetConstraints,
@@ -1666,9 +1663,11 @@ func TestFetchGroupedAssets(t *testing.T) {
 		require.Equal(t, a.Amount, b.Amount)
 		require.Equal(t, a.LockTime, b.LockTime)
 		require.Equal(t, a.RelativeLockTime, b.RelativeLockTime)
-		require.Equal(t, a.Tag, b.Tag)
-		require.Equal(t, a.MetaHash, b.MetaHash)
 		require.Equal(t, a.Type, b.Type)
+
+		require.NotNil(t, a.Genesis())
+		require.Equal(t, a.Genesis().Tag, b.Tag)
+		require.Equal(t, a.Genesis().MetaHash, b.MetaHash)
 	}
 
 	equalityCheck(allAssets[1].Asset, groupedAssets[0])

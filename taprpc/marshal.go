@@ -27,14 +27,19 @@ func MarshalAsset(ctx context.Context, a *asset.Asset,
 		)
 	}
 
+	genesis := a.Genesis()
+	if genesis == nil {
+		return nil, asset.ErrAssetMissingGenesis
+	}
+
 	rpcAsset := &Asset{
 		Version: int32(a.Version),
 		AssetGenesis: &GenesisInfo{
-			GenesisPoint: a.Genesis.FirstPrevOut.String(),
-			Name:         a.Genesis.Tag,
-			MetaHash:     a.Genesis.MetaHash[:],
+			GenesisPoint: genesis.FirstPrevOut.String(),
+			Name:         genesis.Tag,
+			MetaHash:     genesis.MetaHash[:],
 			AssetId:      a.ID[:],
-			OutputIndex:  a.Genesis.OutputIndex,
+			OutputIndex:  genesis.OutputIndex,
 		},
 		AssetType:        AssetType(a.Type),
 		Amount:           a.Amount,

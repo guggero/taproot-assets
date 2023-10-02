@@ -357,12 +357,9 @@ func TestAddrMatchesAsset(t *testing.T) {
 		addr: &address.AddrWithKeyInfo{
 			Tap: mustMakeAddr(t, randGen1, nil, nil, blankKey),
 		},
-		a: &asset.Asset{
-			Genesis: randGen1,
-			ScriptKey: asset.ScriptKey{
-				PubKey: &btcec.PublicKey{},
-			},
-		},
+		a: asset.NewAssetNoErr(t, randGen1, 0, 0, 0, asset.ScriptKey{
+			PubKey: &btcec.PublicKey{},
+		}, nil),
 		result: true,
 	}, {
 		name: "no group key nil",
@@ -372,13 +369,9 @@ func TestAddrMatchesAsset(t *testing.T) {
 				randGroup1.Witness, blankKey,
 			),
 		},
-		a: &asset.Asset{
-			Genesis:  randGen1,
-			GroupKey: randGroup1,
-			ScriptKey: asset.ScriptKey{
-				PubKey: &btcec.PublicKey{},
-			},
-		},
+		a: asset.NewAssetNoErr(t, randGen1, 0, 0, 0, asset.ScriptKey{
+			PubKey: &btcec.PublicKey{},
+		}, randGroup1),
 		result: true,
 	}, {
 		name: "no group key nil but mismatch",
@@ -414,13 +407,9 @@ func TestAddrMatchesAsset(t *testing.T) {
 				randGroup1.Witness, *randKey1,
 			),
 		},
-		a: &asset.Asset{
-			Genesis:  randGen2,
-			GroupKey: randGroup1,
-			ScriptKey: asset.ScriptKey{
-				PubKey: &btcec.PublicKey{},
-			},
-		},
+		a: asset.NewAssetNoErr(t, randGen2, 0, 0, 0, asset.ScriptKey{
+			PubKey: &btcec.PublicKey{},
+		}, randGroup1),
 		result: false,
 	}, {
 		name: "script key mismatch",
@@ -430,13 +419,9 @@ func TestAddrMatchesAsset(t *testing.T) {
 				randGroup1.Witness, *randKey1,
 			),
 		},
-		a: &asset.Asset{
-			Genesis:  randGen1,
-			GroupKey: randGroup1,
-			ScriptKey: asset.ScriptKey{
-				PubKey: randKey2,
-			},
-		},
+		a: asset.NewAssetNoErr(t, randGen1, 0, 0, 0, asset.ScriptKey{
+			PubKey: randKey2,
+		}, randGroup1),
 		result: false,
 	}, {
 		name: "all match",
@@ -446,13 +431,9 @@ func TestAddrMatchesAsset(t *testing.T) {
 				randGroup1.Witness, *randKey2,
 			),
 		},
-		a: &asset.Asset{
-			Genesis:  randGen1,
-			GroupKey: randGroup1,
-			ScriptKey: asset.ScriptKey{
-				PubKey: randKey2,
-			},
-		},
+		a: asset.NewAssetNoErr(t, randGen1, 0, 0, 0, asset.ScriptKey{
+			PubKey: randKey2,
+		}, randGroup1),
 		result: true,
 	}}
 

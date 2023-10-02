@@ -210,7 +210,8 @@ func (s *SimpleSyncer) syncRoot(ctx context.Context, remoteRoot BaseRoot,
 				ctx, uniID, key,
 			)
 			if err != nil {
-				return err
+				return fmt.Errorf("error fetching proof: %w",
+					err)
 			}
 
 			leafProof := newProof[0]

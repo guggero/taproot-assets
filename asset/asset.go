@@ -90,6 +90,10 @@ var (
 	// ErrUnknownVersion is returned when an asset with an unknown asset
 	// version is being used.
 	ErrUnknownVersion = errors.New("asset: unknown asset version")
+
+	// ErrAssetMissingGenesis is returned when an asset is missing its
+	// genesis record.
+	ErrAssetMissingGenesis = errors.New("asset missing genesis")
 )
 
 const (
@@ -183,22 +187,6 @@ func (g Genesis) GroupKeyTweak() []byte {
 	_ = binary.Write(&keyGroupBytes, binary.BigEndian, g.OutputIndex)
 	_ = binary.Write(&keyGroupBytes, binary.BigEndian, g.Type)
 	return keyGroupBytes.Bytes()
-}
-
-// Encode encodes an asset genesis.
-func (g Genesis) Encode(w io.Writer) error {
-	var buf [8]byte
-	return GenesisEncoder(w, &g, &buf)
-}
-
-// DecodeGenesis decodes an asset genesis.
-func DecodeGenesis(r io.Reader) (Genesis, error) {
-	var (
-		buf [8]byte
-		gen Genesis
-	)
-	err := GenesisDecoder(r, &gen, &buf, 0)
-	return gen, err
 }
 
 // Type denotes the asset types supported by the Taproot Asset protocol.
@@ -769,8 +757,11 @@ func DeriveGroupKey(genSigner GenesisSigner, genBuilder GenesisTxBuilder,
 	if !newAsset.HasGenesisWitness() {
 		return nil, fmt.Errorf("asset is not a genesis asset")
 	}
+	if newAsset.genesis == nil {
+		return nil, ErrAssetMissingGenesis
+	}
 
-	if initialGen.Type != newAsset.Type {
+	if initialGen.Type != newAsset.genesis.Type {
 		return nil, fmt.Errorf("asset group type mismatch")
 	}
 
@@ -825,12 +816,15 @@ type Asset struct {
 	// ID is the unique asset ID derived from the asset's genesis
 	ID ID
 
-	// Type uniquely identifies the type of Taproot asset.
+	// Type uniquely identifies the type of Taproot asset. This is the same
+	// value as genesis.Type but because the genesis record is not encoded
+	// in the TLV leaf (only the asset ID and type), we need to have it on
+	// the asset struct as well.
 	Type Type
 
-	// Genesis encodes an asset's genesis metadata which directly maps to
+	// genesis encodes an asset's genesis metadata which directly maps to
 	// its unique ID within the Taproot Asset protocol.
-	Genesis
+	genesis *Genesis
 
 	// Amount is the number of units represented by the asset.
 	Amount uint64
@@ -879,6 +873,16 @@ func (a *Asset) IsUnknownVersion() bool {
 	}
 }
 
+// Genesis returns the asset's genesis record.
+func (a *Asset) Genesis() *Genesis {
+	return a.genesis
+}
+
+// AttachGenesis attaches a genesis record to an asset.
+func (a *Asset) AttachGenesis(genesis *Genesis) {
+	a.genesis = genesis
+}
+
 // New instantiates a new asset with a genesis asset witness.
 func New(genesis Genesis, amount, locktime, relativeLocktime uint64,
 	scriptKey ScriptKey, groupKey *GroupKey) (*Asset, error) {
@@ -908,7 +912,7 @@ func New(genesis Genesis, amount, locktime, relativeLocktime uint64,
 		Version:             V0,
 		ID:                  genesis.ID(),
 		Type:                genesis.Type,
-		Genesis:             genesis,
+		genesis:             &genesis,
 		Amount:              amount,
 		LockTime:            locktime,
 		RelativeLockTime:    relativeLocktime,
@@ -1079,6 +1083,11 @@ func (a *Asset) PrimaryPrevID() (*PrevID, error) {
 func (a *Asset) Copy() *Asset {
 	assetCopy := *a
 
+	if a.genesis != nil {
+		genesisCopy := *a.genesis
+		assetCopy.genesis = &genesisCopy
+	}
+
 	assetCopy.PrevWitnesses = make([]Witness, len(a.PrevWitnesses))
 	for idx := range a.PrevWitnesses {
 		witness := a.PrevWitnesses[idx]
@@ -1194,7 +1203,7 @@ func (a *Asset) DeepEqual(o *Asset) bool {
 func (a *Asset) EncodeRecords() []tlv.Record {
 	records := make([]tlv.Record, 0, 11)
 	records = append(records, NewLeafVersionRecord(&a.Version))
-	records = append(records, NewLeafGenesisRecord(&a.Genesis))
+	records = append(records, NewLeafIDRecord(&a.ID))
 	records = append(records, NewLeafTypeRecord(&a.Type))
 	records = append(records, NewLeafAmountRecord(&a.Amount))
 	if a.LockTime > 0 {
@@ -1228,7 +1237,7 @@ func (a *Asset) EncodeRecords() []tlv.Record {
 func (a *Asset) DecodeRecords() []tlv.Record {
 	return []tlv.Record{
 		NewLeafVersionRecord(&a.Version),
-		NewLeafGenesisRecord(&a.Genesis),
+		NewLeafIDRecord(&a.ID),
 		NewLeafTypeRecord(&a.Type),
 		NewLeafAmountRecord(&a.Amount),
 		NewLeafLockTimeRecord(&a.LockTime),
@@ -1274,7 +1283,12 @@ func (a *Asset) Leaf() (*mssmt.LeafNode, error) {
 // Validate ensures that an asset is valid.
 func (a *Asset) Validate() error {
 	// TODO(ffranr): Add validation check for remaining fields.
-	return ValidateAssetName(a.Genesis.Tag)
+
+	if a.genesis == nil {
+		return ErrAssetMissingGenesis
+	}
+
+	return ValidateAssetName(a.Genesis().Tag)
 }
 
 // ValidateAssetName validates an asset name (the asset's genesis tag).

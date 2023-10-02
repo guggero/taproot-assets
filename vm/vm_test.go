@@ -116,8 +116,12 @@ func genesisStateTransition(assetType asset.Type,
 		}
 
 		if assetType == asset.Normal && !valid {
+			emptyAsset := asset.Asset{}
+			emptyAsset.AttachGenesis(&asset.Genesis{})
 			splitSet := commitment.SplitSet{
-				{}: &commitment.SplitAsset{},
+				{}: &commitment.SplitAsset{
+					Asset: emptyAsset,
+				},
 			}
 			return a, splitSet, nil
 		}

@@ -38,6 +38,15 @@ func assertEqualPackets(t *testing.T, expected, actual *VPacket) {
 		e := expected.Inputs[idx]
 		a := actual.Inputs[idx]
 
+		// Clear any genesis records before comparing, as they aren't
+		// encoded in the asset's packet.
+		if e.Asset() != nil {
+			e.Asset().AttachGenesis(nil)
+		}
+		if a.Asset() != nil {
+			a.Asset().AttachGenesis(nil)
+		}
+
 		if !reflect.DeepEqual(e, a) {
 			require.Equal(t, e, a, "input %d not equal", idx)
 			require.Fail(t, "input not equal")
@@ -49,6 +58,15 @@ func assertEqualPackets(t *testing.T, expected, actual *VPacket) {
 	for idx := range expected.Outputs {
 		e := expected.Outputs[idx]
 		a := actual.Outputs[idx]
+
+		// Clear any genesis records before comparing, as they aren't
+		// encoded in the asset's packet.
+		if e.Asset != nil {
+			e.Asset.AttachGenesis(nil)
+		}
+		if a.Asset != nil {
+			a.Asset.AttachGenesis(nil)
+		}
 
 		if !reflect.DeepEqual(e, a) {
 			require.Equalf(t, e, a, "output %d not equal", idx)

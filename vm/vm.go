@@ -50,6 +50,10 @@ func matchesPrevGenesis(prevID asset.ID, groupKey *asset.GroupKey,
 	case prevID == prevAsset.ID:
 		return true
 
+	// Genesis record missing on the prevAsset.
+	case prevAsset.Genesis() == nil:
+		return false
+
 	// Mismatched ID and nil GroupKey, ouch.
 	case groupKey == nil && prevAsset.GroupKey == nil:
 		fallthrough
@@ -66,7 +70,7 @@ func matchesPrevGenesis(prevID asset.ID, groupKey *asset.GroupKey,
 		}
 
 		// Matched ID and GroupKey, there's still hope!
-		return tag == prevAsset.Genesis.Tag
+		return tag == prevAsset.Genesis().Tag
 
 	// How did we get here?
 	default:
@@ -87,7 +91,7 @@ func matchesAssetParams(newAsset, prevAsset *asset.Asset,
 
 	if !matchesPrevGenesis(
 		prevAssetWitness.PrevID.ID, newAsset.GroupKey,
-		newAsset.Genesis.Tag, prevAsset,
+		newAsset.Genesis().Tag, prevAsset,
 	) {
 
 		return newErrKind(ErrIDMismatch)

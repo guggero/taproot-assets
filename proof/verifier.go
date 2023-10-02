@@ -181,6 +181,11 @@ func (p *Proof) verifyAssetStateTransition(ctx context.Context,
 			OutputIndex: p.InclusionProof.OutputIndex,
 		}
 		newAsset = &splitAsset.PrevWitnesses[0].SplitCommitment.RootAsset
+
+		// An asset can only be split into parts of the same genesis, so
+		// we can just copy over the genesis record from the input
+		// asset.
+		newAsset.AttachGenesis(p.Asset.Genesis())
 	}
 
 	// Gather the set of asset inputs leading to the state transition.
@@ -468,6 +473,19 @@ func (p *Proof) Verify(ctx context.Context, prev *AssetSnapshot,
 	case isGenesisAsset && hasGenesisReveal:
 		if err := p.verifyGenesisReveal(); err != nil {
 			return nil, err
+		}
+
+		// We have a genesis reveal that is valid, we need to attach
+		// that to the asset, so we have access to it in any other
+		// proofs in the chain.
+		p.Asset.AttachGenesis(p.GenesisReveal)
+
+	// If we don't expect a genesis reveal and there is none, this is just
+	// a state transition and not a mint. So we just copy over the previous
+	// asset's genesis record to the current one.
+	default:
+		if prev != nil {
+			p.Asset.AttachGenesis(prev.Asset.Genesis())
 		}
 	}
 
