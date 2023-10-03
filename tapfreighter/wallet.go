@@ -563,7 +563,7 @@ func (f *AssetWallet) FundBurn(ctx context.Context,
 
 	activeAssets := fn.Filter(
 		selectedCommitments, func(c *AnchoredCommitment) bool {
-			return c.Asset.ID() == fundDesc.ID
+			return c.Asset.ID == fundDesc.ID
 		},
 	)
 
@@ -572,7 +572,7 @@ func (f *AssetWallet) FundBurn(ctx context.Context,
 	firstInput := activeAssets[0]
 	firstPrevID := asset.PrevID{
 		OutPoint: firstInput.AnchorPoint,
-		ID:       firstInput.Asset.ID(),
+		ID:       firstInput.Asset.ID,
 		ScriptKey: asset.ToSerialized(
 			firstInput.Asset.ScriptKey.PubKey,
 		),

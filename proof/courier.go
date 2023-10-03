@@ -985,8 +985,7 @@ func (c *UniverseRpcCourier) DeliverProof(ctx context.Context,
 		assetKey := unirpc.MarshalAssetKey(
 			outPoint, proofAsset.ScriptKey.PubKey,
 		)
-		assetID := proofAsset.ID()
-		universeID := unirpc.MarshalUniverseID(assetID[:], nil)
+		universeID := unirpc.MarshalUniverseID(proofAsset.ID[:], nil)
 		universeKey := unirpc.UniverseKey{
 			Id:      universeID,
 			LeafKey: assetKey,
@@ -999,7 +998,7 @@ func (c *UniverseRpcCourier) DeliverProof(ctx context.Context,
 			groupPubKey = &proofAsset.GroupKey.GroupPubKey
 		}
 		loc := Locator{
-			AssetID:   &assetID,
+			AssetID:   &proofAsset.ID,
 			GroupKey:  groupPubKey,
 			ScriptKey: *proofAsset.ScriptKey.PubKey,
 			OutPoint:  &outPoint,
