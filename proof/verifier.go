@@ -402,12 +402,6 @@ func (p *Proof) Verify(ctx context.Context, prev *AssetSnapshot,
 		return nil, ErrUnknownVersion
 	}
 
-	// Ensure proof asset is valid.
-	if err := p.Asset.Validate(); err != nil {
-		return nil, fmt.Errorf("failed to validate proof asset: "+
-			"%w", err)
-	}
-
 	// 1. A transaction that spends the previous asset output has a valid
 	// merkle proof within a block in the chain.
 	if prev != nil && p.PrevOut != prev.OutPoint {
@@ -487,6 +481,13 @@ func (p *Proof) Verify(ctx context.Context, prev *AssetSnapshot,
 		if prev != nil {
 			p.Asset.AttachGenesis(prev.Asset.Genesis())
 		}
+	}
+
+	// Now that we should have a genesis record attached to the asset, we
+	// can validate some of the fields of the asset itself.
+	if err := p.Asset.Validate(); err != nil {
+		return nil, fmt.Errorf("failed to validate proof asset: %w",
+			err)
 	}
 
 	// 6. Verify group key and group key reveal for genesis assets. Not all

@@ -409,6 +409,9 @@ func (a *MintingArchive) getPrevAssetSnapshot(ctx context.Context,
 
 	prevProof := prevProofs[0].Leaf.Proof
 
+	log.Infof("Fetched proof for script key %x (outpoint %v) and got genesis %#v",
+		prevScriptKeyPubKey.SerializeCompressed(), prevID.OutPoint.String(), prevProof.Asset.Genesis())
+
 	// Construct minimal asset snapshot for previous asset.
 	// This is a minimal the proof verification result for the
 	// previous (input) asset. We know that it was already verified
