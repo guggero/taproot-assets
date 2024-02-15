@@ -189,6 +189,10 @@ var testCases = []*testCase{
 		test: testPsbtSighashNoneInvalid,
 	},
 	{
+		name: "psbt sighash trustless swap",
+		test: testPsbtTrustlessSwap,
+	},
+	{
 		name: "multi input psbt single asset id",
 		test: testMultiInputPsbtSingleAssetID,
 	},
