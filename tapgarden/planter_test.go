@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
-	"github.com/lightninglabs/taproot-assets/tapsend"
 	"math/rand"
 	"sync"
 	"testing"
@@ -29,6 +28,7 @@ import (
 	_ "github.com/lightninglabs/taproot-assets/tapdb" // Register relevant drivers.
 	"github.com/lightninglabs/taproot-assets/tapgarden"
 	"github.com/lightninglabs/taproot-assets/tapscript"
+	"github.com/lightninglabs/taproot-assets/tapsend"
 	"github.com/lightningnetwork/lnd/build"
 	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/lntest/wait"
@@ -436,7 +436,7 @@ func (t *mintingTestHarness) assertNumCaretakersActive(n int) {
 
 // assertGenesisTxFunded asserts that a caretaker attempted to fund a new
 // genesis transaction.
-func (t *mintingTestHarness) assertGenesisTxFunded() *tapgarden.FundedPsbt {
+func (t *mintingTestHarness) assertGenesisTxFunded() *tapsend.FundedPsbt {
 	// In order to fund a transaction, we expect a call to estimate the
 	// fee, followed by a request to fund a new PSBT packet.
 	_, err := fn.RecvOrTimeout(
