@@ -196,12 +196,23 @@ func SetNodeUTXOs(t *harnessTest, wallet *node.HarnessNode,
 
 	minerAddr := t.lndHarness.Miner.NewMinerAddress()
 
+	t.lndHarness.Miner.MineBlocks(3)
+
+	balance := wallet.RPC.WalletBalance()
+	t.Logf("### Got wallet balance: %+v", balance)
+
 	// Drain any funds held by the node.
 	wallet.RPC.SendCoins(&lnrpc.SendCoinsRequest{
-		Addr:    minerAddr.EncodeAddress(),
-		SendAll: true,
+		Addr:             minerAddr.EncodeAddress(),
+		SendAll:          true,
+		SatPerVbyte:      1,
+		SpendUnconfirmed: true,
+		// MinConfs: 1,
 	})
 	t.lndHarness.MineBlocksAndAssertNumTxes(1, 1)
+
+	balance = wallet.RPC.WalletBalance()
+	t.Logf("### Sent coins, balance: %+v", balance)
 
 	// Build TXOs from the UTXO requests, which will be used by the miner
 	// to build a TX.

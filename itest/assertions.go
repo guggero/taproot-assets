@@ -261,8 +261,22 @@ func AssertFeeRate(t *testing.T, minerClient *rpcclient.Client, inputAmt int64,
 	require.NoError(t, err)
 
 	vsize := verboseTx.Vsize
+	weight := verboseTx.Weight
+
 	for _, vout := range verboseTx.Vout {
+		t.Logf("### Output value: %v", vout.Value)
 		outputValue += vout.Value
+	}
+
+	for _, vin := range verboseTx.Vin {
+		inString, err := chainhash.NewHashFromStr(vin.Txid)
+		require.NoError(t, err)
+
+		tx, err := minerClient.GetRawTransaction(inString)
+		require.NoError(t, err)
+
+		t.Logf("### Input value: %v", tx.MsgTx().TxOut[vin.Vout].Value)
+
 	}
 
 	t.Logf("TX vsize of %d bytes", vsize)
@@ -270,6 +284,7 @@ func AssertFeeRate(t *testing.T, minerClient *rpcclient.Client, inputAmt int64,
 	btcOutputValue, err := btcutil.NewAmount(outputValue)
 	require.NoError(t, err)
 
+	t.Logf("### Inputs=%v, Outputs=%v", inputAmt, btcOutputValue)
 	actualFee := inputAmt - int64(btcOutputValue)
 
 	switch {
@@ -280,14 +295,12 @@ func AssertFeeRate(t *testing.T, minerClient *rpcclient.Client, inputAmt int64,
 			feeSatPerVbyte * 1000,
 		).FeePerKWeight()
 
-		expectedFee = roundedFeeRate.FeePerKVByte().
-			FeeForVSize(int64(vsize))
+		expectedFee = roundedFeeRate.FeeForWeight(int64(weight))
 		maxOverpayment = roundedFeeRate.FeePerKVByte().
 			FeeForVSize(maxVsizeDifference)
 
 	default:
-		expectedFee = feeRate.FeePerKVByte().
-			FeeForVSize(int64(vsize))
+		expectedFee = feeRate.FeeForWeight(int64(weight))
 		maxOverpayment = feeRate.FeePerKVByte().
 			FeeForVSize(maxVsizeDifference)
 	}

@@ -19,11 +19,11 @@ func testFeeEstimation(t *harnessTest) {
 		// Make a ladder of UTXO values so use order is deterministic.
 		anchorAmounts = []int64{10000, 9990, 9980, 9970}
 
-		// The default feerate in the itests is 12.5 sat/vB, but we
+		// The default feerate in the itests is 3.2 sat/vB, but we
 		// define it here explicitly to use for assertions.
-		defaultFeeRate   = chainfee.SatPerKWeight(3125)
+		defaultFeeRate   = chainfee.SatPerKWeight(800)
 		higherFeeRate    = defaultFeeRate * 2
-		excessiveFeeRate = defaultFeeRate * 8
+		excessiveFeeRate = defaultFeeRate * 32
 		lowFeeRate       = chainfee.SatPerKWeight(500)
 
 		// We will mint assets using the largest NP2WKH output, and then
@@ -45,6 +45,10 @@ func testFeeEstimation(t *harnessTest) {
 				Type:   lnrpc.AddressType_TAPROOT_PUBKEY,
 				Amount: anchorAmounts[3],
 			},
+			{
+				Type:   lnrpc.AddressType_NESTED_PUBKEY_HASH,
+				Amount: 2234,
+			},
 		}
 	)
 
@@ -54,8 +58,10 @@ func testFeeEstimation(t *harnessTest) {
 
 	// Set the initial state of the wallet of the first node. The wallet
 	// state will reset at the end of this test.
-	SetNodeUTXOs(t, t.lndHarness.Alice, btcutil.Amount(1), initialUTXOs)
+	SetNodeUTXOs(t, t.lndHarness.Alice, btcutil.Amount(1), []*UTXORequest{initialUTXOs[0]})
 	defer ResetNodeWallet(t, t.lndHarness.Alice)
+
+	t.lndHarness.SetFeeEstimateWithConf(defaultFeeRate, 6)
 
 	// Mint some assets with a NP2WPKH input, which will give us an anchor
 	// output to spend for a transfer.
@@ -75,6 +81,8 @@ func testFeeEstimation(t *harnessTest) {
 		t.t, t.lndHarness.Miner.Client, anchorAmounts[0],
 		&mintOutpoint.Hash, defaultFeeRate, true,
 	)
+
+	SetNodeUTXOs(t, t.lndHarness.Alice, btcutil.Amount(1), []*UTXORequest{initialUTXOs[1], initialUTXOs[4]})
 
 	// Split the normal asset to create a transfer with two anchor outputs.
 	normalAssetId := rpcAssets[0].AssetGenesis.AssetId
@@ -101,8 +109,10 @@ func testFeeEstimation(t *harnessTest) {
 	sendInputAmt := anchorAmounts[1] + 1000
 	AssertTransferFeeRate(
 		t.t, t.lndHarness.Miner.Client, sendResp, sendInputAmt,
-		defaultFeeRate, false,
+		defaultFeeRate, true,
 	)
+
+	SetNodeUTXOs(t, t.lndHarness.Alice, btcutil.Amount(1), []*UTXORequest{initialUTXOs[2]})
 
 	// Double the fee rate to 25 sat/vB before performing another transfer.
 	t.lndHarness.SetFeeEstimateWithConf(higherFeeRate, 6)
@@ -130,8 +140,10 @@ func testFeeEstimation(t *harnessTest) {
 	sendInputAmt = anchorAmounts[2] + 1000
 	AssertTransferFeeRate(
 		t.t, t.lndHarness.Miner.Client, sendResp, sendInputAmt,
-		higherFeeRate, false,
+		higherFeeRate, true,
 	)
+
+	SetNodeUTXOs(t, t.lndHarness.Alice, btcutil.Amount(1), []*UTXORequest{initialUTXOs[3]})
 
 	// If we quadruple the fee rate, the freighter should fail during input
 	// selection.
@@ -176,6 +188,6 @@ func testFeeEstimation(t *harnessTest) {
 	sendInputAmt = anchorAmounts[3] + 1000
 	AssertTransferFeeRate(
 		t.t, t.lndHarness.Miner.Client, sendResp, sendInputAmt,
-		lowFeeRate, false,
+		lowFeeRate, true,
 	)
 }
