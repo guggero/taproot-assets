@@ -1192,27 +1192,6 @@ func (f *AssetWallet) AnchorVirtualTransactions(ctx context.Context,
 		return nil, fmt.Errorf("error creating anchor TX: %w", err)
 	}
 
-	// We'll need to know the total input value of all anchor transactions
-	// that are going to be spent.
-	amountByInput := make(map[wire.OutPoint]int64)
-	for _, vPkt := range params.ActivePackets {
-		for _, vIn := range vPkt.Inputs {
-			amountByInput[vIn.PrevID.OutPoint] = int64(
-				vIn.Anchor.Value,
-			)
-		}
-	}
-
-	inputSum := int64(0)
-	for _, amount := range amountByInput {
-		inputSum += amount
-	}
-
-	// We know add the anchor input sum to our change output, in order to
-	// not lose that amount to fees.
-	sendPacket.UnsignedTx.TxOut[len(sendPacket.UnsignedTx.TxOut)-1].Value +=
-		inputSum
-
 	// TODO(roasbeef): also want to log the total fee to disk for
 	// accounting, etc.
 
@@ -1235,8 +1214,7 @@ func (f *AssetWallet) AnchorVirtualTransactions(ctx context.Context,
 
 	// We now fund the packet, placing the change on the last output.
 	anchorPkt, err := f.cfg.Wallet.FundPsbt(
-		ctx, sendPacket, 1, params.FeeRate,
-		int32(len(sendPacket.UnsignedTx.TxOut)-1),
+		ctx, sendPacket, 1, params.FeeRate, -1,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("unable to fund psbt: %w", err)

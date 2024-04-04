@@ -17,11 +17,13 @@ import (
 func testFeeEstimation(t *harnessTest) {
 	var (
 		// Make a ladder of UTXO values so use order is deterministic.
-		anchorAmounts = []int64{10000, 9990, 9980, 9970}
+		anchorAmounts = []int64{1_000_000, 999_990, 999_980, 999_970}
 
-		// The default feerate in the itests is 3.2 sat/vB, but we
-		// define it here explicitly to use for assertions.
-		defaultFeeRate   = chainfee.SatPerKWeight(800)
+		// The default feerate in the itests is 12.5 sat/vB, but we
+		// define it here explicitly to use for assertions. Because of
+		// the sat/vByte precision in the FundPsbt API, we choose a
+		// value that is a multiple of 1000 sat/vB.
+		defaultFeeRate   = chainfee.SatPerKWeight(3000)
 		higherFeeRate    = defaultFeeRate * 2
 		excessiveFeeRate = defaultFeeRate * 32
 		lowFeeRate       = chainfee.SatPerKWeight(500)
@@ -47,7 +49,7 @@ func testFeeEstimation(t *harnessTest) {
 			},
 			{
 				Type:   lnrpc.AddressType_NESTED_PUBKEY_HASH,
-				Amount: 2234,
+				Amount: 10000,
 			},
 		}
 	)
@@ -58,7 +60,7 @@ func testFeeEstimation(t *harnessTest) {
 
 	// Set the initial state of the wallet of the first node. The wallet
 	// state will reset at the end of this test.
-	SetNodeUTXOs(t, t.lndHarness.Alice, btcutil.Amount(1), []*UTXORequest{initialUTXOs[0]})
+	SetNodeUTXOs(t, t.lndHarness.Alice, btcutil.Amount(1), initialUTXOs)
 	defer ResetNodeWallet(t, t.lndHarness.Alice)
 
 	t.lndHarness.SetFeeEstimateWithConf(defaultFeeRate, 6)
@@ -79,10 +81,8 @@ func testFeeEstimation(t *harnessTest) {
 	// wallet.
 	AssertFeeRate(
 		t.t, t.lndHarness.Miner.Client, anchorAmounts[0],
-		&mintOutpoint.Hash, defaultFeeRate, true,
+		&mintOutpoint.Hash, defaultFeeRate,
 	)
-
-	SetNodeUTXOs(t, t.lndHarness.Alice, btcutil.Amount(1), []*UTXORequest{initialUTXOs[1], initialUTXOs[4]})
 
 	// Split the normal asset to create a transfer with two anchor outputs.
 	normalAssetId := rpcAssets[0].AssetGenesis.AssetId
@@ -109,10 +109,8 @@ func testFeeEstimation(t *harnessTest) {
 	sendInputAmt := anchorAmounts[1] + 1000
 	AssertTransferFeeRate(
 		t.t, t.lndHarness.Miner.Client, sendResp, sendInputAmt,
-		defaultFeeRate, true,
+		defaultFeeRate,
 	)
-
-	SetNodeUTXOs(t, t.lndHarness.Alice, btcutil.Amount(1), []*UTXORequest{initialUTXOs[2]})
 
 	// Double the fee rate to 25 sat/vB before performing another transfer.
 	t.lndHarness.SetFeeEstimateWithConf(higherFeeRate, 6)
@@ -140,10 +138,8 @@ func testFeeEstimation(t *harnessTest) {
 	sendInputAmt = anchorAmounts[2] + 1000
 	AssertTransferFeeRate(
 		t.t, t.lndHarness.Miner.Client, sendResp, sendInputAmt,
-		higherFeeRate, true,
+		higherFeeRate,
 	)
-
-	SetNodeUTXOs(t, t.lndHarness.Alice, btcutil.Amount(1), []*UTXORequest{initialUTXOs[3]})
 
 	// If we quadruple the fee rate, the freighter should fail during input
 	// selection.
@@ -158,11 +154,18 @@ func testFeeEstimation(t *harnessTest) {
 	)
 	require.NoError(t.t, err)
 
+	SetNodeUTXOs(
+		t, t.lndHarness.Alice, btcutil.Amount(1),
+		[]*UTXORequest{initialUTXOs[4]},
+	)
+
 	AssertAddrCreated(t.t, t.tapd, rpcAssets[0], addr3)
 	_, err = t.tapd.SendAsset(ctxt, &taprpc.SendAssetRequest{
 		TapAddrs: []string{addr3.Encoded},
 	})
-	require.ErrorContains(t.t, err, "insufficient funds available")
+	require.ErrorContains(
+		t.t, err, "error selecting coins: not enough witness outputs",
+	)
 
 	// The transfer should also be rejected if the manually-specified
 	// feerate fails the sanity check against the fee estimator's fee floor
@@ -172,6 +175,7 @@ func testFeeEstimation(t *harnessTest) {
 		FeeRate:  uint32(chainfee.FeePerKwFloor) - 1,
 	})
 	require.ErrorContains(t.t, err, "manual fee rate below floor")
+
 	// After failure at the high feerate, we should still be able to make a
 	// transfer at a very low feerate.
 	t.lndHarness.SetFeeEstimateWithConf(lowFeeRate, 6)
@@ -185,9 +189,9 @@ func testFeeEstimation(t *harnessTest) {
 	transferIdx += 1
 	AssertNonInteractiveRecvComplete(t.t, t.tapd, transferIdx)
 
-	sendInputAmt = anchorAmounts[3] + 1000
+	sendInputAmt = initialUTXOs[4].Amount + 1000
 	AssertTransferFeeRate(
 		t.t, t.lndHarness.Miner.Client, sendResp, sendInputAmt,
-		lowFeeRate, true,
+		lowFeeRate,
 	)
 }

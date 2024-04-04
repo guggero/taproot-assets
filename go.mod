@@ -120,7 +120,7 @@ require (
 	github.com/lightninglabs/lightning-node-connect v0.2.5-alpha // indirect
 	github.com/lightninglabs/neutrino v0.16.0 // indirect
 	github.com/lightningnetwork/lightning-onion v1.2.1-0.20230823005744-06182b1d7d2f // indirect
-	github.com/lightningnetwork/lnd/fn v1.0.4 // indirect
+	github.com/lightningnetwork/lnd/fn v1.0.5 // indirect
 	github.com/lightningnetwork/lnd/healthcheck v1.2.3 // indirect
 	github.com/lightningnetwork/lnd/kvdb v1.4.5 // indirect
 	github.com/lightningnetwork/lnd/queue v1.1.1 // indirect
@@ -204,3 +204,6 @@ require (
 // We want to format raw bytes as hex instead of base64. The forked version
 // allows us to specify that as an option.
 replace google.golang.org/protobuf => github.com/lightninglabs/protobuf-go-hex-display v1.30.0-hex-display
+
+replace github.com/lightningnetwork/lnd => ../../lightningnetwork/lnd
+replace github.com/lightningnetwork/lnd/tlv => ../../lightningnetwork/lnd/tlv
