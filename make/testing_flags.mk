@@ -54,6 +54,11 @@ ifeq ($(dbbackend),postgres)
 DEV_TAGS += test_db_postgres
 endif
 
+# Run universe tests with increased scale for performance testing.
+ifneq ($(long-tests),)
+TEST_FLAGS += long-tests
+endif
+
 ifneq ($(tags),)
 DEV_TAGS += ${tags}
 endif
