@@ -10,7 +10,6 @@ import (
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/lightninglabs/taproot-assets/address"
 	"github.com/lightninglabs/taproot-assets/asset"
@@ -667,7 +666,7 @@ func (v *schnorrSigValidator) ValidateWitnesses(newAsset *asset.Asset,
 		if !ok {
 			return fmt.Errorf("%w: no prev asset for "+
 				"input_prev_id=%v", vm.ErrNoInputs,
-				spew.Sdump(witness.PrevID))
+				limitSpewer.Sdump(witness.PrevID))
 		}
 
 		var (
