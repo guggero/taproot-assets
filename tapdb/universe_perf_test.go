@@ -2,7 +2,6 @@ package tapdb
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"strings"
 	"testing"
@@ -12,16 +11,6 @@ import (
 	"github.com/lightningnetwork/lnd/clock"
 	"github.com/stretchr/testify/require"
 )
-
-var (
-	numAssets         = 100
-	numLeavesPerTree  = 300
-	numEventsPerAsset = 100
-	numQueries        = 100
-)
-
-// longTestScale is the scale factor for long tests.
-const longTestScale = 5
 
 // Common indices for universe tables.
 const (
@@ -366,14 +355,6 @@ type queryStats struct {
 // indices.
 func TestUniverseIndexPerformance(t *testing.T) {
 	t.Parallel()
-
-	// Scale up if running long tests.
-	if flag.Lookup("long-tests") != nil {
-		numAssets *= longTestScale
-		numLeavesPerTree *= longTestScale
-		numEventsPerAsset *= longTestScale
-		numQueries *= longTestScale
-	}
 
 	testResults := make(map[string]*queryStats)
 

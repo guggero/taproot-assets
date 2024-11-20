@@ -56,7 +56,7 @@ endif
 
 # Run universe tests with increased scale for performance testing.
 ifneq ($(long-tests),)
-TEST_FLAGS += long-tests
+DEV_TAGS += longtests
 endif
 
 ifneq ($(tags),)
