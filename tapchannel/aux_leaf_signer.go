@@ -407,12 +407,20 @@ func verifyHtlcSignature(chainParams *address.ChainParams,
 				"verify second level: %w", err)
 		}
 
+		// Because we're verifying an HTLC first-level output, we need
+		// to apply the same tweak to the key as we did when creating
+		// the script key in the allocation. That tweak was applied to
+		// the script key to guarantee uniqueness on the asset level.
+		verifyKey := TweakPubKeyWithIndex(
+			keyRing.RemoteHtlcKey, baseJob.HTLC.HtlcIndex,
+		)
+
 		leafToVerify := txscript.TapLeaf{
 			Script:      htlcScript.WitnessScriptToSign(),
 			LeafVersion: txscript.BaseLeafVersion,
 		}
 		validator := &schnorrSigValidator{
-			pubKey:     *keyRing.RemoteHtlcKey,
+			pubKey:     *verifyKey,
 			tapLeaf:    lfn.Some(leafToVerify),
 			signMethod: input.TaprootScriptSpendSignMethod,
 		}
@@ -432,8 +440,9 @@ func verifyHtlcSignature(chainParams *address.ChainParams,
 // that should be used to verify the generated signature, and also the leaf to
 // be signed.
 func applySignDescToVIn(signDesc input.SignDescriptor, vIn *tappsbt.VInput,
-	chainParams *address.ChainParams,
-	tapscriptRoot []byte) (btcec.PublicKey, txscript.TapLeaf) {
+	chainParams *address.ChainParams, tapscriptRoot []byte,
+	index input.HtlcIndex, tweakWithIndex bool) (btcec.PublicKey,
+	txscript.TapLeaf) {
 
 	leafToSign := txscript.TapLeaf{
 		Script:      signDesc.WitnessScript,
@@ -459,20 +468,26 @@ func applySignDescToVIn(signDesc input.SignDescriptor, vIn *tappsbt.VInput,
 	vIn.SighashType = signDesc.HashType
 	vIn.TaprootMerkleRoot = tapscriptRoot
 
+	// We might need to apply another tweak to the public key if this is an
+	// HTLC first-level output, where we've applied a tweak to the script
+	// key to guarantee uniqueness.
+	singleTweak := signDesc.SingleTweak
+	if tweakWithIndex {
+		singleTweak = AddTweakWithIndex(singleTweak, index)
+	}
+
 	// Apply single or double tweaks if present in the sign
 	// descriptor. At the same time, we apply the tweaks to a copy
 	// of the public key, so we can validate the produced signature.
 	signingKey := signDesc.KeyDesc.PubKey
-	if len(signDesc.SingleTweak) > 0 {
+	if len(singleTweak) > 0 {
 		key := btcwallet.PsbtKeyTypeInputSignatureTweakSingle
 		vIn.Unknowns = append(vIn.Unknowns, &psbt.Unknown{
 			Key:   key,
-			Value: signDesc.SingleTweak,
+			Value: singleTweak,
 		})
 
-		signingKey = input.TweakPubKeyWithTweak(
-			signingKey, signDesc.SingleTweak,
-		)
+		signingKey = input.TweakPubKeyWithTweak(signingKey, singleTweak)
 	}
 	if signDesc.DoubleTweak != nil {
 		key := btcwallet.PsbtKeyTypeInputSignatureTweakDouble
@@ -527,6 +542,7 @@ func (s *AuxLeafSigner) generateHtlcSignature(chanState lnwallet.AuxChanState,
 
 		signingKey, leafToSign := applySignDescToVIn(
 			signDesc, vIn, s.cfg.ChainParams, tapscriptRoot,
+			baseJob.HTLC.HtlcIndex, true,
 		)
 
 		// We can now sign this virtual packet, as we've given the
@@ -815,4 +831,24 @@ func TweakHtlcTree(tree input.ScriptTree,
 		TapscriptTree: tree.TapscriptTree,
 		TapscriptRoot: tree.TapscriptRoot,
 	}
+}
+
+// AddTweakWithIndex adds the given index to the given tweak. If the tweak is
+// empty, the index is used as the tweak directly. The value of 1 is always
+// added to the index to make sure this value is always non-zero.
+func AddTweakWithIndex(maybeTweak []byte, index input.HtlcIndex) []byte {
+	indexTweak := HtlcIndexAsScriptKeyTweak(index)
+
+	// If we don't already have a tweak, we just use the index as the tweak.
+	if len(maybeTweak) == 0 {
+		return fn.ByteSlice(indexTweak.Bytes())
+	}
+
+	// If we have a tweak, we need to parse/decode it as a scalar, then add
+	// the index as a scalar, and encode it back to a byte slice.
+	tweak := new(secp256k1.ModNScalar)
+	_ = tweak.SetByteSlice(maybeTweak)
+	newTweak := tweak.Add(indexTweak)
+
+	return fn.ByteSlice(newTweak.Bytes())
 }

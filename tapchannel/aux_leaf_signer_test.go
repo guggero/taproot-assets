@@ -7,12 +7,14 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/lightninglabs/taproot-assets/asset"
+	"github.com/lightninglabs/taproot-assets/fn"
 	"github.com/lightninglabs/taproot-assets/internal/test"
 	cmsg "github.com/lightninglabs/taproot-assets/tapchannelmsg"
 	"github.com/lightningnetwork/lnd/input"
@@ -391,6 +393,64 @@ func TestTweakHtlcTree(t *testing.T) {
 				tweakedTree.TaprootKey.SerializeCompressed(),
 			)
 			require.Equal(t, tc.result, tweakedTree)
+		})
+	}
+}
+
+// TestAddTweakWithIndex tests the AddTweakWithIndex function.
+func TestAddTweakWithIndex(t *testing.T) {
+	var (
+		bufMaxUint64 = make([]byte, 8)
+		maxUint64    = new(secp256k1.ModNScalar)
+	)
+	binary.BigEndian.PutUint64(bufMaxUint64, math.MaxUint64)
+	_ = maxUint64.SetByteSlice(bufMaxUint64)
+	maxUint64Double := new(secp256k1.ModNScalar).
+		Set(maxUint64).Add(maxUint64)
+
+	testCases := []struct {
+		name   string
+		tweak  []byte
+		index  uint64
+		result *secp256k1.ModNScalar
+	}{
+		{
+			name:   "empty tweak, index 0",
+			index:  0,
+			result: new(secp256k1.ModNScalar).SetInt(1),
+		},
+		{
+			name:   "five as tweak, index 123",
+			tweak:  []byte{0x05},
+			index:  123,
+			result: new(secp256k1.ModNScalar).SetInt(129),
+		},
+		{
+			name:   "all zero tweak, index 123",
+			tweak:  bytes.Repeat([]byte{0}, 32),
+			index:  123,
+			result: new(secp256k1.ModNScalar).SetInt(124),
+		},
+		{
+			name:   "tweak math.MaxUint64, index math.MaxUint64-1",
+			tweak:  fn.ByteSlice(maxUint64.Bytes()),
+			index:  math.MaxUint64 - 1,
+			result: maxUint64Double,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tweak := AddTweakWithIndex(tc.tweak, tc.index)
+			resultBytes := tc.result.Bytes()
+			resultBigInt := new(big.Int).SetBytes(resultBytes[:])
+			tweakBigInt := new(big.Int).SetBytes(tweak)
+			// 36893488147419103230
+			// 55340232221128654845
+
+			require.Equalf(t, resultBytes[:], tweak, "expected: "+
+				"%s, got: %s", resultBigInt.String(),
+				tweakBigInt.String())
 		})
 	}
 }

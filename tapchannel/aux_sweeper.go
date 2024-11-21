@@ -314,7 +314,7 @@ func (a *AuxSweeper) signSweepVpackets(vPackets []*tappsbt.VPacket,
 		// signature.
 		signingKey, leafToSign := applySignDescToVIn(
 			signDesc, vIn, &a.cfg.ChainParams,
-			tapscriptDesc.scriptTree.TapTweak(),
+			tapscriptDesc.scriptTree.TapTweak(), 0, false,
 		)
 
 		// In this case, the witness isn't special, so we'll set the
