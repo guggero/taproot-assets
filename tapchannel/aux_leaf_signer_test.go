@@ -3,13 +3,17 @@ package tapchannel
 import (
 	"bytes"
 	"crypto/rand"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"testing"
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/txscript"
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/lightninglabs/taproot-assets/asset"
+	"github.com/lightninglabs/taproot-assets/internal/test"
 	cmsg "github.com/lightninglabs/taproot-assets/tapchannelmsg"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/lnwire"
@@ -162,4 +166,231 @@ func makeCommitSig(t *testing.T, numAssetIDs, numHTLCs int) *lnwire.CommitSig {
 	}
 
 	return msg
+}
+
+// TestHtlcIndexAsScriptKeyTweak tests the HtlcIndexAsScriptKeyTweak function.
+func TestHtlcIndexAsScriptKeyTweak(t *testing.T) {
+	var (
+		buf               = make([]byte, 8)
+		maxUint64MinusOne = new(secp256k1.ModNScalar)
+		maxUint64         = new(secp256k1.ModNScalar)
+	)
+	binary.BigEndian.PutUint64(buf, math.MaxUint64-1)
+	_ = maxUint64MinusOne.SetByteSlice(buf)
+
+	binary.BigEndian.PutUint64(buf, math.MaxUint64)
+	_ = maxUint64.SetByteSlice(buf)
+
+	testCases := []struct {
+		name   string
+		index  uint64
+		result *secp256k1.ModNScalar
+	}{
+		{
+			name:   "index 0",
+			index:  0,
+			result: new(secp256k1.ModNScalar).SetInt(1),
+		},
+		{
+			name:  "index math.MaxUint32-1",
+			index: math.MaxUint32 - 1,
+			result: new(secp256k1.ModNScalar).SetInt(
+				math.MaxUint32,
+			),
+		},
+		{
+			name:   "index math.MaxUint64-2",
+			index:  math.MaxUint64 - 2,
+			result: maxUint64MinusOne,
+		},
+		{
+			name:   "index math.MaxUint64-1",
+			index:  math.MaxUint64 - 1,
+			result: maxUint64,
+		},
+		{
+			name:   "index math.MaxUint64, wraps around to 1",
+			index:  math.MaxUint64,
+			result: new(secp256k1.ModNScalar).SetInt(1),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tweak := HtlcIndexAsScriptKeyTweak(tc.index)
+			require.Equal(t, tc.result, tweak)
+		})
+	}
+}
+
+// TestTweakPubKeyWithIndex tests the TweakPubKeyWithIndex function.
+func TestTweakPubKeyWithIndex(t *testing.T) {
+	randNum := test.RandInt[uint32]()
+
+	makePubKey := func(tweak uint64) *btcec.PublicKey {
+		var (
+			buf    = make([]byte, 8)
+			scalar = new(secp256k1.ModNScalar)
+		)
+		binary.BigEndian.PutUint64(buf, uint64(randNum)+tweak)
+		_ = scalar.SetByteSlice(buf)
+		return secp256k1.NewPrivateKey(scalar).PubKey()
+	}
+	startKey := makePubKey(0)
+
+	testCases := []struct {
+		name   string
+		pubKey *btcec.PublicKey
+		index  uint64
+		result *btcec.PublicKey
+	}{
+		{
+			name:   "index 0",
+			pubKey: startKey,
+			index:  0,
+			result: makePubKey(1),
+		},
+		{
+			name:   "index 1",
+			pubKey: startKey,
+			index:  1,
+			result: makePubKey(2),
+		},
+		{
+			name:   "index 99",
+			pubKey: startKey,
+			index:  99,
+			result: makePubKey(100),
+		},
+		{
+			name:   "index math.MaxUint32-1",
+			pubKey: startKey,
+			index:  math.MaxUint32 - 1,
+			result: makePubKey(math.MaxUint32),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tweakedKey := TweakPubKeyWithIndex(tc.pubKey, tc.index)
+			require.Equal(
+				t, tc.result.SerializeCompressed(),
+				tweakedKey.SerializeCompressed(),
+			)
+		})
+	}
+}
+
+// TestTweakHtlcTree tests the TweakHtlcTree function.
+func TestTweakHtlcTree(t *testing.T) {
+	randTree := txscript.AssembleTaprootScriptTree(
+		test.RandTapLeaf(nil), test.RandTapLeaf(nil),
+		test.RandTapLeaf(nil),
+	)
+	randRoot := randTree.RootNode.TapHash()
+	randNum := test.RandInt[uint32]()
+
+	makePubKey := func(tweak uint64) *btcec.PublicKey {
+		var (
+			buf    = make([]byte, 8)
+			scalar = new(secp256k1.ModNScalar)
+		)
+		binary.BigEndian.PutUint64(buf, uint64(randNum)+tweak)
+		_ = scalar.SetByteSlice(buf)
+		return secp256k1.NewPrivateKey(scalar).PubKey()
+	}
+	makeTaprootKey := func(tweak uint64) *btcec.PublicKey {
+		return txscript.ComputeTaprootOutputKey(
+			makePubKey(tweak), randRoot[:],
+		)
+	}
+	startKey := makePubKey(0)
+	startTaprootKey := makeTaprootKey(0)
+
+	testCases := []struct {
+		name   string
+		tree   input.ScriptTree
+		index  uint64
+		result input.ScriptTree
+	}{
+		{
+			name: "index 0",
+			tree: input.ScriptTree{
+				InternalKey:   startKey,
+				TaprootKey:    startTaprootKey,
+				TapscriptTree: randTree,
+				TapscriptRoot: randRoot[:],
+			},
+			index: 0,
+			result: input.ScriptTree{
+				InternalKey:   makePubKey(1),
+				TaprootKey:    makeTaprootKey(1),
+				TapscriptTree: randTree,
+				TapscriptRoot: randRoot[:],
+			},
+		},
+		{
+			name: "index 1",
+			tree: input.ScriptTree{
+				InternalKey:   startKey,
+				TaprootKey:    startTaprootKey,
+				TapscriptTree: randTree,
+				TapscriptRoot: randRoot[:],
+			},
+			index: 1,
+			result: input.ScriptTree{
+				InternalKey:   makePubKey(2),
+				TaprootKey:    makeTaprootKey(2),
+				TapscriptTree: randTree,
+				TapscriptRoot: randRoot[:],
+			},
+		},
+		{
+			name: "index 99",
+			tree: input.ScriptTree{
+				InternalKey:   startKey,
+				TaprootKey:    startTaprootKey,
+				TapscriptTree: randTree,
+				TapscriptRoot: randRoot[:],
+			},
+			index: 99,
+			result: input.ScriptTree{
+				InternalKey:   makePubKey(100),
+				TaprootKey:    makeTaprootKey(100),
+				TapscriptTree: randTree,
+				TapscriptRoot: randRoot[:],
+			},
+		},
+		{
+			name: "index math.MaxUint32-1",
+			tree: input.ScriptTree{
+				InternalKey:   startKey,
+				TaprootKey:    startTaprootKey,
+				TapscriptTree: randTree,
+				TapscriptRoot: randRoot[:],
+			},
+			index: math.MaxUint32 - 1,
+			result: input.ScriptTree{
+				InternalKey:   makePubKey(math.MaxUint32),
+				TaprootKey:    makeTaprootKey(math.MaxUint32),
+				TapscriptTree: randTree,
+				TapscriptRoot: randRoot[:],
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tweakedTree := TweakHtlcTree(tc.tree, tc.index)
+			require.Equal(
+				t, tc.result.InternalKey.SerializeCompressed(),
+				tweakedTree.InternalKey.SerializeCompressed(),
+			)
+			require.Equal(
+				t, tc.result.TaprootKey.SerializeCompressed(),
+				tweakedTree.TaprootKey.SerializeCompressed(),
+			)
+			require.Equal(t, tc.result, tweakedTree)
+		})
+	}
 }
