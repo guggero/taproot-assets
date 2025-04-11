@@ -366,6 +366,33 @@ func addSTXOExclusionProofs(outputs []*tappsbt.VOutput,
 			continue
 		}
 
+		// Find the exclusion proofs for this output.
+		var eProof *proof.TaprootProof
+		for idx := range params.ExclusionProofs {
+			e := params.ExclusionProofs[idx]
+			if e.OutputIndex == outIndex {
+				eProof = &params.ExclusionProofs[idx]
+				break
+			}
+		}
+		if eProof == nil {
+			return fmt.Errorf("no exclusion proof for "+
+				"output %d", outIndex)
+		}
+
+		// There aren't any assets in that output, we can skip
+		// creating exclusion proofs for it.
+		if eProof.CommitmentProof == nil {
+			continue
+		}
+
+		commitmentProof := eProof.CommitmentProof
+		if commitmentProof.STXOProofs == nil {
+			commitmentProof.STXOProofs = make(
+				map[asset.SerializedKey]commitment.Proof,
+			)
+		}
+
 		tapTree := outputCommitments[outIndex]
 
 		for idx := range stxoAssets {
@@ -381,28 +408,6 @@ func addSTXOExclusionProofs(outputs []*tappsbt.VOutput,
 				return err
 			}
 
-			// Find the exclusion proofs for this output.
-			var eProof *proof.TaprootProof
-			for idx := range params.ExclusionProofs {
-				e := params.ExclusionProofs[idx]
-				if e.OutputIndex == outIndex {
-					eProof = &params.ExclusionProofs[idx]
-					break
-				}
-			}
-			if eProof == nil {
-				return fmt.Errorf("no exclusion proof for "+
-					"output %d", outIndex)
-			}
-
-			// There aren't any assets in that output, we can skip
-			// creating exclusion proofs for it.
-			if eProof.CommitmentProof == nil {
-				continue
-			}
-
-			commitmentProof := eProof.CommitmentProof
-
 			// Confirm that we are creating the stxo proofs for the
 			// asset that is being created. We do this by confirming
 			// that the exclusion proof for the newly created asset
@@ -415,13 +420,6 @@ func addSTXOExclusionProofs(outputs []*tappsbt.VOutput,
 				return fmt.Errorf("v1 proof for newly created "+
 					"asset not found during creation of "+
 					"stxo proofs: %w", err)
-			}
-
-			//nolint:lll
-			if commitmentProof.STXOProofs == nil {
-				commitmentProof.STXOProofs = make(
-					map[asset.SerializedKey]commitment.Proof,
-				)
 			}
 
 			commitmentProof.STXOProofs[identifier] = *exclusionProof
